@@ -32,17 +32,17 @@ class Snake {
     }
     processInput() {
         console.log(keys);
-        if (keys["a"] && this.dir != "r") {
+        if ((keys["a"] || keys["ArrowLeft"]) && this.dir != "r") {
             this.dir = "l";
         }
-        if (keys["d"] && this.dir != "l") {
-            this.dir = "r";
+        if ((keys["d"] || keys["ArrowRight"]) && this.dir != "l") {
+          this.dir = "r";
         }
-        if (keys["w"] && this.dir != "d") {
-            this.dir = "u";
+        if ((keys["w"] || keys["ArrowUp"]) && this.dir != "d") {
+          this.dir = "u";
         }
-        if (keys["s"] && this.dir != "u") {
-            this.dir = "d";
+        if ((keys["s"] || keys["ArrowDown"]) && this.dir != "u") {
+          this.dir = "d";
         }
         keys = {};
     }
@@ -82,7 +82,9 @@ class Snake {
         let eat = false;
         while (head.x == food.x && head.y == food.y) {
             eat = true;
-            food = new SnakePart(randInt(10), randInt(1));
+            while (this.rects.some((r) => r.x == food.x && r.y == food.y)) {
+                food = new SnakePart(randInt(10), randInt(10));
+            }
         }
 
         if (!eat) this.rects.pop();
@@ -117,7 +119,7 @@ setInterval(() => {
     snake.move();
     snake.draw();
     console.log(snake);
-}, 170);
+}, 100);
 
 window.addEventListener("keydown", function (e) {
     keys = {};
