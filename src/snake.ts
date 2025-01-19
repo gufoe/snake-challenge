@@ -232,31 +232,25 @@ export class Snake {
     }
 
     getSegmentColor(index: number): { color: string, effect?: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => void } {
-        if (this.transitionTime <= 0) {
-            return { color: index === 0 ? "#4CAF50" : "#2E7D32" };
-        }
-
-        const progress = this.transitionTime / this.transitionDuration;
-        const delayedProgress = Math.max(0, Math.min(1, progress * 2 - (index * 0.1)));
-
+        // If no food type is set, use default green
         if (!this.lastFoodType) {
             return { color: index === 0 ? "#4CAF50" : "#2E7D32" };
         }
 
         const baseColor = this.getBaseColorForFood(this.lastFoodType, index);
-        const effect = this.getEffectForFood(this.lastFoodType, index, delayedProgress);
+        const effect = this.getEffectForFood(this.lastFoodType, index, 1.0);
 
         // Special handling for HSL colors (from RainbowFood)
         if (this.lastFoodType instanceof RainbowFood) {
             return {
-                color: baseColor.replace(')', `, ${delayedProgress})`).replace('hsl', 'hsla'),
+                color: baseColor,
                 effect: effect
             };
         }
 
-        // For hex colors, use the existing RGB conversion
+        // For hex colors, use solid colors
         return {
-            color: `rgba(${hexToRgb(baseColor).join(',')},${delayedProgress})`,
+            color: baseColor,
             effect: effect
         };
     }
@@ -335,18 +329,28 @@ export class Snake {
     }
 
     draw(ctx: CanvasRenderingContext2D) {
-        // Update transition effect
-        if (this.transitionTime > 0) {
-            this.transitionTime = Math.max(0, this.transitionTime - 16);
-            this.effectRotation += 0.1;
-        }
+        // Only update rotation for effects
+        this.effectRotation += 0.1;
 
         // Draw trail effect with gradient
         const trailGradient = ctx.createLinearGradient(0, 0, 500, 500);
-        trailGradient.addColorStop(0, 'rgba(76, 175, 80, 0.1)');
-        trailGradient.addColorStop(1, 'rgba(76, 175, 80, 0.05)');
+        if (this.lastFoodType) {
+            const baseColor = this.getBaseColorForFood(this.lastFoodType, 0);
+            if (this.lastFoodType instanceof RainbowFood) {
+                const hue = (this.effectRotation * 50) % 360;
+                trailGradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 0.1)`);
+                trailGradient.addColorStop(1, `hsla(${hue}, 100%, 50%, 0.05)`);
+            } else {
+                const rgb = hexToRgb(baseColor);
+                trailGradient.addColorStop(0, `rgba(${rgb.join(',')}, 0.1)`);
+                trailGradient.addColorStop(1, `rgba(${rgb.join(',')}, 0.05)`);
+            }
+        } else {
+            trailGradient.addColorStop(0, 'rgba(76, 175, 80, 0.1)');
+            trailGradient.addColorStop(1, 'rgba(76, 175, 80, 0.05)');
+        }
 
-        // Draw trails
+        // Draw trail effect with gradient
         this.rects.forEach((r, i) => {
             const alpha = 0.15 - (i * 0.01);
             if (alpha > 0) {
@@ -569,6 +573,9 @@ export class Snake {
     }
 
     reset(x: number, y: number) {
+        // Store current style
+        const currentFoodType = this.lastFoodType;
+
         this.rects = [
             new SnakePart(x, y),
             new SnakePart(x + 1, y)
@@ -576,8 +583,10 @@ export class Snake {
         this.score = 0;
         this.dir = "l";
         this.moveTimer = 0;
-        this.transitionTime = 0;
-        this.lastFoodType = null;
+
+        // Restore the current food style
+        this.lastFoodType = currentFoodType;
+        this.transitionTime = this.transitionDuration;
         this.effectRotation = 0;
         this.isGameOver = false;
         this.gameOverTime = 0;

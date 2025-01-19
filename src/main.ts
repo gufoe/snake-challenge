@@ -242,13 +242,15 @@ const ambientParticles: AmbientParticle[] = [
 const initialFoodType = foodTypes[currentFoodIndex];
 currentFood = new initialFoodType(randInt(10), randInt(10));
 
-// Create the snake and initialize its style with current food
+// Create the snake with the initial food's style
 const snake = new Snake(randInt(10), randInt(10));
 snake.lastFoodType = currentFood;
-snake.transitionTime = snake.transitionDuration;
+snake.transitionTime = 0; // No transition needed for initial state
 
-// Now spawn the next food
-spawnNewFood();
+// Prepare the next food
+currentFoodIndex = (currentFoodIndex + 1) % foodTypes.length;
+const NextFoodType = foodTypes[currentFoodIndex];
+nextFoodType = new NextFoodType(0, 0);
 
 // Set up keyboard controls
 window.addEventListener("keydown", function (e) {
@@ -459,12 +461,7 @@ function gameLoop(currentTime: number) {
             const foodX = currentFood.x * 50 + 25;
             const foodY = currentFood.y * 50 + 25;
 
-            // Store the CURRENT food type for transition effect
-            snake.lastFoodType = currentFood;
-            snake.transitionTime = snake.transitionDuration;
-            snake.effectRotation = 0;
-
-            // Create food-specific eat effect
+            // Create food-specific eat effect using the current (eaten) food
             const newParticles = currentFood.createEatEffect(foodX, foodY);
             particles.push(...newParticles);
 
@@ -485,8 +482,13 @@ function gameLoop(currentTime: number) {
             // Update score based on food type
             snake.score += currentFood.points;
 
-            // Spawn new food
+            // Spawn new food first
             spawnNewFood();
+
+            // Then update snake style to match the new current food
+            snake.lastFoodType = currentFood;
+            snake.transitionTime = snake.transitionDuration;
+            snake.effectRotation = 0;
         }
     }
 
