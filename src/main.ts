@@ -440,14 +440,6 @@ function gameLoop(currentTime: number) {
     // Fade out glow intensity
     glowIntensity = Math.max(0, glowIntensity - deltaTime * 0.1);
 
-    // Draw score with enhanced shadow effect
-    ctx.fillStyle = "#FFF";
-    ctx.font = "bold 40px 'Arial'";
-    ctx.textBaseline = "bottom";
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = 10;
-    ctx.fillText(`Score: ${snake.score}`, 10, 490);
-    ctx.shadowBlur = 0;
 
     // Update and draw game objects
     drawFood();

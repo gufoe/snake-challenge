@@ -141,7 +141,7 @@ export class RainbowFood extends Food {
         return particles;
     }
 
-    get points() { return 2; }
+    get points() { return 1; }
 }
 
 export class CrystalFood extends Food {
@@ -211,7 +211,7 @@ export class CrystalFood extends Food {
         return particles;
     }
 
-    get points() { return 3; }
+    get points() { return 1; }
 }
 
 export class PulsarFood extends Food {
@@ -298,7 +298,7 @@ export class PulsarFood extends Food {
         return particles;
     }
 
-    get points() { return 4; }
+    get points() { return 1; }
 }
 
 export const foodTypes = [StarFood, RainbowFood, CrystalFood, PulsarFood];

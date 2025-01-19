@@ -214,6 +214,9 @@ export class Snake {
     dir: "l" | "u" | "d" | "r" = "l";
     moveTimer = 0;
     moveInterval = 150;
+    baseInterval = 150;  // Store the initial interval
+    minInterval = 60;    // Minimum interval (max speed)
+    speedIncrease = 5;   // How much faster to get per food
     isGameOver = false;
     gameOverTime = 0;
     gameOverDuration = 1000;
@@ -388,6 +391,11 @@ export class Snake {
             this.drawHeadDetails(ctx);
         }
 
+        // Draw in-game score
+        if (!this.isGameOver) {
+            this.drawScore(ctx);
+        }
+
         // Draw game over screen
         if (this.isGameOver) {
             const progress = 1 - (this.gameOverTime / this.gameOverDuration);
@@ -400,13 +408,13 @@ export class Snake {
         const x = head.lerpX * 50;
         const y = head.lerpY * 50;
         const size = 50;
-        const eyeSize = 8;
-        const eyeOffset = 15;
+        const eyeSize = 14;
+        const eyeOffset = 17;
         const eyeY = y + eyeOffset;
 
         // Add eyes with enhanced glow
         ctx.shadowColor = '#fff';
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 20;
         ctx.fillStyle = "#fff";
 
         // Draw diamond-shaped eyes
@@ -427,75 +435,197 @@ export class Snake {
         let pupilX = 0;
         let pupilY = 0;
 
-        if (this.dir === 'l') pupilX = -2;
-        if (this.dir === 'r') pupilX = 2;
-        if (this.dir === 'u') pupilY = -2;
-        if (this.dir === 'd') pupilY = 2;
+        if (this.dir === 'l') pupilX = -3;
+        if (this.dir === 'r') pupilX = 3;
+        if (this.dir === 'u') pupilY = -3;
+        if (this.dir === 'd') pupilY = 3;
 
         ctx.shadowBlur = 0;
         ctx.fillStyle = '#000';
 
-        // Draw diamond-shaped pupils
+        // Draw larger, rounder pupils
         const drawPupil = (centerX: number, centerY: number) => {
             ctx.beginPath();
-            const pupilSize = eyeSize/2.5;
-            ctx.moveTo(centerX + pupilX, centerY + pupilY - pupilSize/2);
-            ctx.lineTo(centerX + pupilX + pupilSize/2, centerY + pupilY);
-            ctx.lineTo(centerX + pupilX, centerY + pupilY + pupilSize/2);
-            ctx.lineTo(centerX + pupilX - pupilSize/2, centerY + pupilY);
-            ctx.closePath();
+            const pupilSize = eyeSize/2;
+            ctx.arc(centerX + pupilX, centerY + pupilY, pupilSize/2, 0, Math.PI * 2);
             ctx.fill();
         };
 
         drawPupil(x + eyeOffset, eyeY);
         drawPupil(x + size - eyeOffset, eyeY);
 
-        // Add eye shine as small triangles
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        const shineSize = 3;
-        const drawShine = (centerX: number, centerY: number) => {
+        // Add cute sparkles in the eyes
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        const drawSparkle = (centerX: number, centerY: number) => {
+            // Main shine
             ctx.beginPath();
-            ctx.moveTo(centerX - 2, centerY - 2);
-            ctx.lineTo(centerX - 2 + shineSize, centerY - 2);
-            ctx.lineTo(centerX - 2, centerY - 2 + shineSize);
-            ctx.closePath();
+            ctx.arc(centerX - 2 + pupilX/2, centerY - 2 + pupilY/2, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Small secondary shine
+            ctx.beginPath();
+            ctx.arc(centerX + 2 + pupilX/2, centerY + 2 + pupilY/2, 1.5, 0, Math.PI * 2);
             ctx.fill();
         };
 
-        drawShine(x + eyeOffset, eyeY);
-        drawShine(x + size - eyeOffset, eyeY);
+        drawSparkle(x + eyeOffset, eyeY);
+        drawSparkle(x + size - eyeOffset, eyeY);
+    }
+
+    private drawScore(ctx: CanvasRenderingContext2D) {
+        const x = 460;
+        const y = 40;
+        const hexRadius = 25;
+
+        // Draw hexagonal background
+        ctx.save();
+        ctx.translate(x, y);
+
+        // Rotate slowly
+        const rotationSpeed = 0.0005;
+        const rotation = Date.now() * rotationSpeed;
+        ctx.rotate(rotation);
+
+        // Draw outer hexagon
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = i * Math.PI / 3;
+            const px = hexRadius * Math.cos(angle);
+            const py = hexRadius * Math.sin(angle);
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = `rgba(255, 255, 255, 0.2)`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw inner hexagon
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = i * Math.PI / 3;
+            const px = (hexRadius - 5) * Math.cos(angle);
+            const py = (hexRadius - 5) * Math.sin(angle);
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = `rgba(255, 255, 255, 0.1)`;
+        ctx.stroke();
+        ctx.restore();
+
+        // Draw score text
+        ctx.save();
+        ctx.translate(x, y);
+
+        // Add glow effect
+        ctx.shadowColor = this.lastFoodType ?
+            this.getBaseColorForFood(this.lastFoodType, 0) :
+            '#4CAF50';
+        ctx.shadowBlur = 10;
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.score.toString(), 0, 0);
+
+        ctx.restore();
     }
 
     drawGameOver(ctx: CanvasRenderingContext2D, progress: number) {
-        // Fade in background
-        ctx.fillStyle = `rgba(0, 0, 0, ${0.7 * progress})`;
+        // Dark overlay with radial gradient
+        const gradient = ctx.createRadialGradient(250, 250, 0, 250, 250, 400);
+        gradient.addColorStop(0, `rgba(0, 0, 0, ${0.5 * progress})`);
+        gradient.addColorStop(1, `rgba(0, 0, 0, ${0.9 * progress})`);
+        ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, 500, 500);
 
         // Set up text properties
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Draw "GAME OVER" text with glow effect
+
+        // Draw "GAME OVER" text with enhanced effects
+        ctx.save();
+        const shake = Math.sin(Date.now() / 100) * 2 * progress;
+        ctx.translate(250 + shake, 200);
+        const scale = 1 + Math.sin(Date.now() / 500) * 0.05;
+        ctx.scale(scale, scale);
+
+        // Multiple shadow layers for stronger glow
         ctx.shadowColor = '#ff4444';
-        ctx.shadowBlur = 20 * progress;
+        ctx.shadowBlur = 30 * progress;
         ctx.fillStyle = '#ff4444';
-        ctx.font = 'bold 60px Arial';
-        ctx.fillText('GAME OVER', 250, 200);
+        ctx.font = 'bold 70px Arial';
+        ctx.fillText('GAME OVER', 0, 0);
 
-        // Draw score
+        // Add second layer of text
+        ctx.shadowBlur = 15 * progress;
+        ctx.fillStyle = '#ff6666';
+        ctx.fillText('GAME OVER', 0, 0);
+        ctx.restore();
+
+        // Draw score with growing effect
+        ctx.save();
+        ctx.translate(250, 270);
+        const scoreScale = Math.min(1, progress * 1.5);
+        ctx.scale(scoreScale, scoreScale);
+
         ctx.shadowColor = '#fff';
-        ctx.shadowBlur = 10 * progress;
+        ctx.shadowBlur = 15 * progress;
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 30px Arial';
-        ctx.fillText(`Score: ${this.score}`, 250, 270);
+        ctx.font = 'bold 35px Arial';
+        ctx.fillText(`Score: ${this.score}`, 0, 0);
+        ctx.restore();
 
-        // Draw restart instruction with pulsing effect
+        // Draw restart instruction with floating effect
+        ctx.save();
+        ctx.translate(250, 350 + Math.sin(Date.now() / 400) * 5);
         const pulseScale = 1 + Math.sin(Date.now() / 500) * 0.1;
-        ctx.font = `${20 * pulseScale}px Arial`;
-        ctx.fillText('Press ENTER to restart', 250, 350);
+        ctx.scale(pulseScale, pulseScale);
+
+        // Draw key hint with proper centering
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.8 * progress})`;
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'right';
+        ctx.fillText('Press', -40, 0);
+
+        // Draw ENTER key centered
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 * progress})`;
+        ctx.lineWidth = 2;
+        this.drawKey(ctx, 0, 0, 70, 25, 'ENTER');
+
+        // Draw "to restart" text
+        ctx.textAlign = 'left';
+        ctx.fillText('to restart', 40, 0);
+        ctx.restore();
 
         // Reset shadow
         ctx.shadowBlur = 0;
+    }
+
+    // Helper method to draw a key
+    private drawKey(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, text: string) {
+        const radius = 5;
+
+        // Draw key background
+        ctx.beginPath();
+        ctx.moveTo(x - width/2 + radius, y - height/2);
+        ctx.lineTo(x + width/2 - radius, y - height/2);
+        ctx.quadraticCurveTo(x + width/2, y - height/2, x + width/2, y - height/2 + radius);
+        ctx.lineTo(x + width/2, y + height/2 - radius);
+        ctx.quadraticCurveTo(x + width/2, y + height/2, x + width/2 - radius, y + height/2);
+        ctx.lineTo(x - width/2 + radius, y + height/2);
+        ctx.quadraticCurveTo(x - width/2, y + height/2, x - width/2, y + height/2 - radius);
+        ctx.lineTo(x - width/2, y - height/2 + radius);
+        ctx.quadraticCurveTo(x - width/2, y - height/2, x - width/2 + radius, y - height/2);
+        ctx.stroke();
+
+        // Draw key text with proper centering
+        ctx.textAlign = 'center';
+        ctx.font = '16px Arial';
+        ctx.fillText(text, x, y + 2);
     }
 
     processInput(keys: { [key: string]: boolean }) {
@@ -570,6 +700,12 @@ export class Snake {
         const newTail = new SnakePart(lastPos.x, lastPos.y);
         newTail.setTarget(lastPos.x, lastPos.y);
         this.rects.push(newTail);
+
+        // Increase speed by reducing the interval
+        this.moveInterval = Math.max(
+            this.minInterval,
+            this.moveInterval - this.speedIncrease
+        );
     }
 
     reset(x: number, y: number) {
@@ -583,6 +719,7 @@ export class Snake {
         this.score = 0;
         this.dir = "l";
         this.moveTimer = 0;
+        this.moveInterval = this.baseInterval;  // Reset speed to initial value
 
         // Restore the current food style
         this.lastFoodType = currentFoodType;
