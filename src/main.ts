@@ -6,6 +6,15 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   <canvas id="canvas" width=500 height=500/>
 `;
 
+// Initialize canvas and context
+const canvas: HTMLCanvasElement = document.querySelector("#canvas")!;
+const ctx = canvas.getContext("2d")!;
+const map: Rect = {
+    x: 0,
+    y: 0,
+    s: 500,
+};
+
 /**
  * Represents a single segment of the snake
  * Each segment smoothly interpolates between positions using lerp (linear interpolation)
@@ -238,12 +247,17 @@ function shadeColor(color: string, percent: number) {
     return "#" + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 + (G<255?G<1?0:G:255)*0x100 + (B<255?B<1?0:B:255)).toString(16).slice(1);
 }
 
-// Initialize game objects
-let food: SnakePart = new SnakePart(randInt(10), randInt(10));
-let foodPulse = 0; // Used for food animation
-let keys: any = {}; // Tracks currently pressed keys
+// Initialize game state variables
+let particles: Particle[] = [];
+let glowIntensity = 0;
+let foodRotation = 0;
+let foodScale = 1;
+let foodGlowIntensity = 20;
+let foodPulse = 0;
+let keys: any = {};
+let currentFood: Food;
 
-// Add particle system for effects
+// Define Particle class first as it's used by other classes
 class Particle {
     x: number;
     y: number;
@@ -334,43 +348,427 @@ class Particle {
     }
 }
 
-// Add to existing game state
-let particles: Particle[] = [];
-let glowIntensity = 0;
-let foodRotation = 0;
-let foodScale = 1;
-let foodGlowIntensity = 20;
+// Define base Food class and food types
+abstract class Food {
+    x: number;
+    y: number;
+    rotation: number = 0;
+    scale: number = 1;
+    pulse: number = 0;
+    glowIntensity: number = 20;
 
-/**
- * Main snake class that handles game logic and snake movement
- */
+    constructor(x: number, y: number) {
+        this.x = x;
+        this.y = y;
+    }
+
+    update() {
+        this.pulse = (this.pulse + 0.1) % (Math.PI * 2);
+        this.rotation = (this.rotation + 0.02);
+        this.scale = 1 + Math.sin(this.pulse) * 0.1;
+        this.glowIntensity = 20 + Math.sin(this.pulse) * 10;
+    }
+
+    abstract draw(ctx: CanvasRenderingContext2D): void;
+    abstract createEatEffect(x: number, y: number): void;
+    abstract get points(): number;
+}
+
+class StarFood extends Food {
+    draw(ctx: CanvasRenderingContext2D) {
+        const centerX = this.x * 50 + 25;
+        const centerY = this.y * 50 + 25;
+
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(this.rotation);
+        ctx.scale(this.scale, this.scale);
+
+        ctx.shadowColor = "#FF5722";
+        ctx.shadowBlur = this.glowIntensity;
+
+        // Draw star shape
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++) {
+            const angle = (i * Math.PI * 2) / 5 - Math.PI / 2;
+            const nextAngle = ((i + 1) * Math.PI * 2) / 5 - Math.PI / 2;
+            const outerX = Math.cos(angle) * 18;
+            const outerY = Math.sin(angle) * 18;
+            const innerX = Math.cos((angle + nextAngle) / 2) * 8;
+            const innerY = Math.sin((angle + nextAngle) / 2) * 8;
+
+            if (i === 0) ctx.moveTo(outerX, outerY);
+            else ctx.lineTo(outerX, outerY);
+            ctx.lineTo(innerX, innerY);
+        }
+        ctx.closePath();
+
+        const gradient = ctx.createRadialGradient(-8, -8, 0, 0, 0, 20);
+        gradient.addColorStop(0, '#FF7043');
+        gradient.addColorStop(0.6, '#FF5722');
+        gradient.addColorStop(1, '#F4511E');
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Orbital dots
+        ctx.fillStyle = '#FFB74D';
+        for (let i = 0; i < 4; i++) {
+            const angle = this.rotation * 2 + (i * Math.PI * 2) / 4;
+            const x = Math.cos(angle) * 25;
+            const y = Math.sin(angle) * 25;
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+
+    createEatEffect(x: number, y: number) {
+        // Original particle effect
+        for (let i = 0; i < 20; i++) {
+            const angle = (i / 20) * Math.PI * 2;
+            particles.push(new Particle(x, y, 'rgb(255, 87, 34)', {
+                speed: 2,
+                size: 5,
+                life: 40,
+                shape: 'star'
+            }));
+        }
+    }
+
+    get points() { return 1; }
+}
+
+class RainbowFood extends Food {
+    private hue: number = 0;
+
+    update() {
+        super.update();
+        this.hue = (this.hue + 1) % 360;
+    }
+
+    draw(ctx: CanvasRenderingContext2D) {
+        const centerX = this.x * 50 + 25;
+        const centerY = this.y * 50 + 25;
+
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(this.rotation);
+        ctx.scale(this.scale, this.scale);
+
+        ctx.shadowColor = `hsl(${this.hue}, 100%, 50%)`;
+        ctx.shadowBlur = this.glowIntensity;
+
+        // Draw spiral
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const radius = 15;
+            const x = Math.cos(angle) * radius;
+            const y = Math.sin(angle) * radius;
+
+            ctx.beginPath();
+            ctx.arc(x, y, 8, 0, Math.PI * 2);
+            ctx.fillStyle = `hsl(${(this.hue + i * 60) % 360}, 100%, 50%)`;
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+
+    createEatEffect(x: number, y: number) {
+        // Rainbow explosion
+        for (let i = 0; i < 36; i++) {
+            const hue = (this.hue + i * 10) % 360;
+            particles.push(new Particle(x, y, `hsl(${hue}, 100%, 50%)`, {
+                speed: 3,
+                size: 4,
+                life: 50,
+                shape: 'circle'
+            }));
+        }
+    }
+
+    get points() { return 2; }
+}
+
+class CrystalFood extends Food {
+    draw(ctx: CanvasRenderingContext2D) {
+        const centerX = this.x * 50 + 25;
+        const centerY = this.y * 50 + 25;
+
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(this.rotation);
+        ctx.scale(this.scale, this.scale);
+
+        ctx.shadowColor = "#64B5F6";
+        ctx.shadowBlur = this.glowIntensity;
+
+        // Draw hexagon
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI * 2) / 6;
+            const x = Math.cos(angle) * 15;
+            const y = Math.sin(angle) * 15;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+
+        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 20);
+        gradient.addColorStop(0, '#E3F2FD');
+        gradient.addColorStop(0.5, '#64B5F6');
+        gradient.addColorStop(1, '#1E88E5');
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Inner lines
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 3; i++) {
+            const angle = (i * Math.PI) / 3;
+            ctx.beginPath();
+            ctx.moveTo(-15 * Math.cos(angle), -15 * Math.sin(angle));
+            ctx.lineTo(15 * Math.cos(angle), 15 * Math.sin(angle));
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
+    createEatEffect(x: number, y: number) {
+        // Crystal shatter effect
+        for (let i = 0; i < 12; i++) {
+            const angle = (i / 12) * Math.PI * 2;
+            particles.push(new Particle(x, y, '#64B5F6', {
+                speed: 2,
+                size: 8,
+                life: 45,
+                shape: 'spark'
+            }));
+        }
+        // Add some sparkles
+        for (let i = 0; i < 15; i++) {
+            particles.push(new Particle(x, y, '#E3F2FD', {
+                speed: 1,
+                size: 3,
+                life: 30,
+                shape: 'circle'
+            }));
+        }
+    }
+
+    get points() { return 3; }
+}
+
+// Add new Pulsar food type
+class PulsarFood extends Food {
+    private innerRotation = 0;
+    private outerRotation = 0;
+
+    update() {
+        super.update();
+        this.innerRotation = (this.innerRotation + 0.03) % (Math.PI * 2);
+        this.outerRotation = (this.outerRotation - 0.02) % (Math.PI * 2);
+    }
+
+    draw(ctx: CanvasRenderingContext2D) {
+        const centerX = this.x * 50 + 25;
+        const centerY = this.y * 50 + 25;
+
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.scale(this.scale, this.scale);
+
+        // Outer glow
+        ctx.shadowColor = "#9C27B0";
+        ctx.shadowBlur = this.glowIntensity;
+
+        // Draw outer ring
+        ctx.strokeStyle = "#E1BEE7";
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 8; i++) {
+            const angle = this.outerRotation + (i * Math.PI * 2) / 8;
+            const x = Math.cos(angle) * 20;
+            const y = Math.sin(angle) * 20;
+            ctx.beginPath();
+            ctx.moveTo(x * 0.7, y * 0.7);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        }
+
+        // Draw inner core
+        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 15);
+        gradient.addColorStop(0, '#E040FB');
+        gradient.addColorStop(0.6, '#9C27B0');
+        gradient.addColorStop(1, '#7B1FA2');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, 15, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw energy beams
+        ctx.strokeStyle = 'rgba(225, 190, 231, 0.6)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 4; i++) {
+            const angle = this.innerRotation + (i * Math.PI * 2) / 4;
+            const x = Math.cos(angle) * 12;
+            const y = Math.sin(angle) * 12;
+            ctx.beginPath();
+            ctx.moveTo(-x, -y);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
+    createEatEffect(x: number, y: number) {
+        // Create energy burst effect
+        for (let i = 0; i < 16; i++) {
+            const angle = (i * Math.PI * 2) / 16;
+            particles.push(new Particle(x, y, '#E040FB', {
+                speed: 3,
+                size: 6,
+                life: 35,
+                shape: 'spark'
+            }));
+        }
+
+        // Add some purple sparkles
+        for (let i = 0; i < 20; i++) {
+            particles.push(new Particle(x, y, '#E1BEE7', {
+                speed: 1.5,
+                size: 3,
+                life: 45,
+                shape: 'circle'
+            }));
+        }
+    }
+
+    get points() { return 4; }
+}
+
+// Update available food types
+const foodTypes = [StarFood, RainbowFood, CrystalFood, PulsarFood];
+let currentFoodIndex = Math.floor(Math.random() * foodTypes.length);
+
+// Define Snake class
 class Snake {
     score = 0;
-    // Initialize with two segments - head and one body part
     rects: SnakePart[] = [
         new SnakePart(randInt(10), randInt(10)),
         new SnakePart(randInt(10), randInt(10))
     ];
-    dir: "l" | "u" | "d" | "r" = "l"; // Current direction
+    dir: "l" | "u" | "d" | "r" = "l";
     moveTimer = 0;
-    moveInterval = 150; // Time between moves in milliseconds
+    moveInterval = 150;
 
-    constructor() {
-        // Make sure the second segment starts at a valid position behind the head
-        const head = this.rects[0];
-        const tail = this.rects[1];
-        tail.x = (head.x + 1) % 10; // Place tail to the right of head
-        tail.y = head.y;
-        tail.lerpX = tail.x;
-        tail.lerpY = tail.y;
-        tail.targetX = tail.x;
-        tail.targetY = tail.y;
+    // Add transition properties
+    transitionTime = 0;
+    transitionDuration = 1000; // 1 second transition
+    lastFoodType: Food | null = null;
+    effectRotation = 0;
+
+    getSegmentColor(index: number): { color: string, effect?: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => void } {
+        if (this.transitionTime <= 0) {
+            return { color: index === 0 ? "#4CAF50" : "#2E7D32" };
+        }
+
+        const progress = this.transitionTime / this.transitionDuration;
+        const reverseProgress = 1 - progress;
+
+        // Calculate position-based delay (wave effect from head to tail)
+        const delayedProgress = Math.max(0, Math.min(1, progress * 2 - (index * 0.1)));
+
+        if (this.lastFoodType instanceof StarFood) {
+            const baseColor = index === 0 ? '#FF5722' : '#F4511E';
+            return {
+                color: `rgba(${hexToRgb(baseColor).join(',')},${delayedProgress})`,
+                effect: (ctx, x, y, size) => {
+                    if (delayedProgress > 0.2) {
+                        ctx.fillStyle = '#FFB74D';
+                        const angle = this.effectRotation + (index * Math.PI / 8);
+                        const orbitX = x + size/2 + Math.cos(angle) * 25 * delayedProgress;
+                        const orbitY = y + size/2 + Math.sin(angle) * 25 * delayedProgress;
+                        ctx.beginPath();
+                        ctx.arc(orbitX, orbitY, 3 * delayedProgress, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            };
+        } else if (this.lastFoodType instanceof RainbowFood) {
+            const hue = (index * 30 + this.effectRotation * 50) % 360;
+            return {
+                color: `hsla(${hue}, 100%, 50%, ${delayedProgress})`,
+                effect: (ctx, x, y, size) => {
+                    if (delayedProgress > 0.2) {
+                        const gradient = ctx.createLinearGradient(x, y, x + size, y + size);
+                        gradient.addColorStop(0, `hsla(${hue}, 100%, 50%, ${delayedProgress * 0.3})`);
+                        gradient.addColorStop(1, `hsla(${(hue + 60) % 360}, 100%, 50%, 0)`);
+                        ctx.fillStyle = gradient;
+                        ctx.fill();
+                    }
+                }
+            };
+        } else if (this.lastFoodType instanceof CrystalFood) {
+            const baseColor = '#64B5F6';
+            return {
+                color: `rgba(${hexToRgb(baseColor).join(',')},${delayedProgress})`,
+                effect: (ctx, x, y, size) => {
+                    if (delayedProgress > 0.2) {
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${delayedProgress * 0.5})`;
+                        ctx.lineWidth = 1;
+                        const angle = this.effectRotation + (index * Math.PI / 6);
+                        ctx.beginPath();
+                        ctx.moveTo(x + size/2, y + size/2);
+                        ctx.lineTo(
+                            x + size/2 + Math.cos(angle) * size/2 * delayedProgress,
+                            y + size/2 + Math.sin(angle) * size/2 * delayedProgress
+                        );
+                        ctx.stroke();
+                    }
+                }
+            };
+        } else if (this.lastFoodType instanceof PulsarFood) {
+            const baseColor = '#9C27B0';
+            return {
+                color: `rgba(${hexToRgb(baseColor).join(',')},${delayedProgress})`,
+                effect: (ctx, x, y, size) => {
+                    if (delayedProgress > 0.2) {
+                        ctx.strokeStyle = `rgba(225, 190, 231, ${delayedProgress * 0.6})`;
+                        ctx.lineWidth = 2;
+                        const angles = [0, Math.PI/2, Math.PI, Math.PI*3/2];
+                        angles.forEach(baseAngle => {
+                            const angle = baseAngle + this.effectRotation + (index * 0.2);
+                            const length = 15 * delayedProgress;
+                            ctx.beginPath();
+                            ctx.moveTo(
+                                x + size/2 + Math.cos(angle) * length * 0.3,
+                                y + size/2 + Math.sin(angle) * length * 0.3
+                            );
+                            ctx.lineTo(
+                                x + size/2 + Math.cos(angle) * length,
+                                y + size/2 + Math.sin(angle) * length
+                            );
+                            ctx.stroke();
+                        });
+                    }
+                }
+            };
+        }
+
+        return { color: index === 0 ? "#4CAF50" : "#2E7D32" };
     }
 
-    /**
-     * Draws all snake segments with their connections
-     */
     draw() {
+        // Update transition effect
+        if (this.transitionTime > 0) {
+            this.transitionTime = Math.max(0, this.transitionTime - 16); // Assuming 60fps
+            this.effectRotation += 0.1;
+        }
+
         // Draw trail effect with gradient
         const trailGradient = ctx.createLinearGradient(0, 0, 500, 500);
         trailGradient.addColorStop(0, 'rgba(76, 175, 80, 0.1)');
@@ -393,80 +791,25 @@ class Snake {
             }
         });
 
-        // Draw snake segments in order, but draw the head's body first
-        if (this.rects.length > 1) {
-            // Draw head's body (without eyes) first
-            this.rects[0].draw("#4CAF50", false, this.rects[1]);
-        }
-
-        // Draw body segments
-        for (let i = 1; i < this.rects.length; i++) {
+        // Draw snake segments
+        this.rects.forEach((r, i) => {
             const nextPart = this.rects[i + 1];
-            this.rects[i].draw("#2E7D32", false, nextPart);
-        }
+            const { color, effect } = this.getSegmentColor(i);
 
-        // Draw head's eyes and details last
+            // Draw base segment
+            r.draw(color, i === 0, nextPart);
+
+            // Apply special effect if any
+            if (effect) {
+                const x = r.lerpX * 50;
+                const y = r.lerpY * 50;
+                effect(ctx, x, y, 50);
+            }
+        });
+
+        // Draw head details last (eyes, etc.)
         if (this.rects.length > 0) {
-            // Only draw the head details (eyes, etc.)
-            const head = this.rects[0];
-            const x = head.lerpX * 50;
-            const y = head.lerpY * 50;
-            const size = 50;
-            const padding = 4;
-            const radius = 24;
-
-            // Add eyes with enhanced glow
-            ctx.shadowColor = '#fff';
-            ctx.shadowBlur = 15;
-            ctx.fillStyle = "#fff";
-            const eyeSize = 9;
-            const eyeOffset = 15;
-            const eyeY = y + eyeOffset;
-
-            // Left eye
-            ctx.beginPath();
-            ctx.arc(x + eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Right eye
-            ctx.beginPath();
-            ctx.arc(x + size - eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Add pupils that follow movement direction with gradient
-            ctx.shadowBlur = 0;
-            const pupilGradient = ctx.createRadialGradient(
-                x + eyeOffset, eyeY, 0,
-                x + eyeOffset, eyeY, eyeSize/1.5
-            );
-            pupilGradient.addColorStop(0, '#444');
-            pupilGradient.addColorStop(1, '#000');
-            ctx.fillStyle = pupilGradient;
-
-            let pupilX = 0;
-            let pupilY = 0;
-
-            // Adjust pupil position based on movement direction
-            if (this.dir === 'l') pupilX = -3;
-            if (this.dir === 'r') pupilX = 3;
-            if (this.dir === 'u') pupilY = -3;
-            if (this.dir === 'd') pupilY = 3;
-
-            ctx.beginPath();
-            ctx.arc(x + eyeOffset + pupilX, eyeY + pupilY, eyeSize/1.8, 0, Math.PI * 2);
-            ctx.arc(x + size - eyeOffset + pupilX, eyeY + pupilY, eyeSize/1.8, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Add eye shine
-            ctx.fillStyle = 'rgba(255,255,255,0.7)';
-            const shineSize = 3;
-            ctx.beginPath();
-            ctx.arc(x + eyeOffset - 2, eyeY - 2, shineSize, 0, Math.PI * 2);
-            ctx.arc(x + size - eyeOffset - 2, eyeY - 2, shineSize, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Reset shadow
-            ctx.shadowBlur = 0;
+            this.drawHeadDetails();
         }
     }
 
@@ -528,62 +871,17 @@ class Snake {
         });
 
         // Handle food collision and snake growth
-        if (newX === food.x && newY === food.y) {
-            const foodX = food.x * 50 + 25;
-            const foodY = food.y * 50 + 25;
+        if (newX === currentFood.x && newY === currentFood.y) {
+            const foodX = currentFood.x * 50 + 25;
+            const foodY = currentFood.y * 50 + 25;
 
-            // Create expanding ring effect
-            for (let i = 0; i < 20; i++) {
-                const angle = (i / 20) * Math.PI * 2;
-                const p = new Particle(
-                    foodX + Math.cos(angle) * 20,
-                    foodY + Math.sin(angle) * 20,
-                    'rgb(255, 255, 255)',
-                    { speed: 0.5, life: 30, shape: 'spark' }
-                );
-                p.vx = Math.cos(angle) * 3;
-                p.vy = Math.sin(angle) * 3;
-                particles.push(p);
-            }
+            // Store the food type for transition effect
+            this.lastFoodType = currentFood;
+            this.transitionTime = this.transitionDuration;
+            this.effectRotation = 0;
 
-            // Add star particles
-            for (let i = 0; i < 8; i++) {
-                particles.push(new Particle(foodX, foodY, 'rgb(255, 193, 7)', {
-                    speed: 1.5,
-                    size: 8,
-                    life: 60,
-                    shape: 'star'
-                }));
-            }
-
-            // Add regular particles with different colors
-            const colors = [
-                'rgb(255, 87, 34)',  // Orange
-                'rgb(255, 193, 7)',  // Gold
-                'rgb(255, 235, 59)', // Yellow
-                'rgb(76, 175, 80)'   // Green
-            ];
-
-            for (let i = 0; i < 30; i++) {
-                particles.push(new Particle(foodX, foodY, colors[i % colors.length], {
-                    speed: 2,
-                    size: 5 + Math.random() * 3
-                }));
-            }
-
-            // Add some trailing sparks
-            for (let i = 0; i < 15; i++) {
-                setTimeout(() => {
-                    if (particles) { // Check if particles array still exists
-                        particles.push(new Particle(foodX, foodY, 'rgb(255, 255, 255)', {
-                            speed: 3,
-                            size: 3,
-                            life: 20,
-                            shape: 'spark'
-                        }));
-                    }
-                }, i * 50);
-            }
+            // Create food-specific eat effect
+            currentFood.createEatEffect(foodX, foodY);
 
             // Add flash effect
             glowIntensity = 40;
@@ -594,11 +892,11 @@ class Snake {
             newTail.setTarget(lastPos.x, lastPos.y);
             this.rects.push(newTail);
 
-            // Move food to new random position
-            do {
-                food = new SnakePart(randInt(10), randInt(10));
-            } while (this.rects.some((r) => r.targetX == food.x && r.targetY == food.y));
-            this.score++;
+            // Update score based on food type
+            this.score += currentFood.points;
+
+            // Spawn new food
+            spawnNewFood();
         }
     }
 
@@ -619,17 +917,90 @@ class Snake {
             part.updateLerp(deltaTime);
         });
     }
+
+    drawHeadDetails() {
+        // Only draw the head details (eyes, etc.)
+        const head = this.rects[0];
+        const x = head.lerpX * 50;
+        const y = head.lerpY * 50;
+        const size = 50;
+        const padding = 4;
+        const radius = 24;
+
+        // Add eyes with enhanced glow
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = "#fff";
+        const eyeSize = 9;
+        const eyeOffset = 15;
+        const eyeY = y + eyeOffset;
+
+        // Left eye
+        ctx.beginPath();
+        ctx.arc(x + eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Right eye
+        ctx.beginPath();
+        ctx.arc(x + size - eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Add pupils that follow movement direction with gradient
+        ctx.shadowBlur = 0;
+        const pupilGradient = ctx.createRadialGradient(
+            x + eyeOffset, eyeY, 0,
+            x + eyeOffset, eyeY, eyeSize/1.5
+        );
+        pupilGradient.addColorStop(0, '#444');
+        pupilGradient.addColorStop(1, '#000');
+        ctx.fillStyle = pupilGradient;
+
+        let pupilX = 0;
+        let pupilY = 0;
+
+        // Adjust pupil position based on movement direction
+        if (this.dir === 'l') pupilX = -3;
+        if (this.dir === 'r') pupilX = 3;
+        if (this.dir === 'u') pupilY = -3;
+        if (this.dir === 'd') pupilY = 3;
+
+        ctx.beginPath();
+        ctx.arc(x + eyeOffset + pupilX, eyeY + pupilY, eyeSize/1.8, 0, Math.PI * 2);
+        ctx.arc(x + size - eyeOffset + pupilX, eyeY + pupilY, eyeSize/1.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Add eye shine
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        const shineSize = 3;
+        ctx.beginPath();
+        ctx.arc(x + eyeOffset - 2, eyeY - 2, shineSize, 0, Math.PI * 2);
+        ctx.arc(x + size - eyeOffset - 2, eyeY - 2, shineSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Reset shadow
+        ctx.shadowBlur = 0;
+    }
 }
 
-// Initialize canvas and game objects
-const canvas: HTMLCanvasElement = document.querySelector("#canvas")!;
-const ctx = canvas.getContext("2d")!;
-const map: Rect = {
-    x: 0,
-    y: 0,
-    s: 500,
-};
+// Create the snake
 const snake = new Snake();
+
+// Modify spawn function to cycle through food types
+function spawnNewFood() {
+    let x: number, y: number;
+    do {
+        x = randInt(10);
+        y = randInt(10);
+    } while (snake.rects.some((r) => r.targetX == x && r.targetY == y));
+
+    // Cycle to next food type
+    currentFoodIndex = (currentFoodIndex + 1) % foodTypes.length;
+    const FoodType = foodTypes[currentFoodIndex];
+    currentFood = new FoodType(x, y);
+}
+
+// Initialize first food
+spawnNewFood();
 
 /**
  * Draws the game grid
@@ -654,81 +1025,10 @@ function drawGrid() {
  * Draws the food with enhanced animations and effects
  */
 function drawFood() {
-    const centerX = food.x * 50 + 25;
-    const centerY = food.y * 50 + 25;
-
-    // Update animations
-    foodPulse = (foodPulse + 0.1) % (Math.PI * 2);
-    foodRotation = (foodRotation + 0.02);
-    foodScale = 1 + Math.sin(foodPulse) * 0.1;
-    foodGlowIntensity = 20 + Math.sin(foodPulse) * 10;
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(foodRotation);
-    ctx.scale(foodScale, foodScale);
-
-    // Draw outer glow (matching snake's glow style)
-    ctx.shadowColor = "#FF5722";
-    ctx.shadowBlur = foodGlowIntensity;
-
-    // Draw main shape (star)
-    ctx.beginPath();
-    for (let i = 0; i < 5; i++) {
-        const angle = (i * Math.PI * 2) / 5 - Math.PI / 2;
-        const nextAngle = ((i + 1) * Math.PI * 2) / 5 - Math.PI / 2;
-
-        // Outer point
-        const outerX = Math.cos(angle) * 18;
-        const outerY = Math.sin(angle) * 18;
-
-        // Inner point
-        const innerX = Math.cos((angle + nextAngle) / 2) * 8;
-        const innerY = Math.sin((angle + nextAngle) / 2) * 8;
-
-        if (i === 0) {
-            ctx.moveTo(outerX, outerY);
-        } else {
-            ctx.lineTo(outerX, outerY);
-        }
-
-        ctx.lineTo(innerX, innerY);
-    }
-    ctx.closePath();
-
-    // Use flat colors with subtle gradient like the snake
-    const baseColor = "#FF5722";
-    const gradient = ctx.createRadialGradient(
-        -8, -8, 0,
-        0, 0, 20
-    );
-    gradient.addColorStop(0, shadeColor(baseColor, 30));
-    gradient.addColorStop(0.6, baseColor);
-    gradient.addColorStop(1, shadeColor(baseColor, -20));
-
-    ctx.fillStyle = gradient;
-    ctx.fill();
-
-    // Add simple shine effect (matching snake's style)
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx.fill();
-
-    // Add simple orbital dots (matching snake's minimal style)
-    ctx.fillStyle = shadeColor(baseColor, 30);
-    const orbitRadius = 25;
-    const dotCount = 4;
-    for (let i = 0; i < dotCount; i++) {
-        const angle = foodRotation * 2 + (i * Math.PI * 2) / dotCount;
-        const x = Math.cos(angle) * orbitRadius;
-        const y = Math.sin(angle) * orbitRadius;
-
-        ctx.beginPath();
-        ctx.arc(x, y, 3, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    ctx.restore();
-    ctx.shadowBlur = 0;
+    // Update current food's animation state
+    currentFood.update();
+    // Draw current food using its specific drawing method
+    currentFood.draw(ctx);
 }
 
 // Track time for smooth animation
@@ -782,3 +1082,13 @@ window.addEventListener("keydown", function (e) {
     keys = {};
     keys[e.key] = true;
 });
+
+// Helper function to convert hex to rgb
+function hexToRgb(hex: string): number[] {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? [
+        parseInt(result[1], 16),
+        parseInt(result[2], 16),
+        parseInt(result[3], 16)
+    ] : [0, 0, 0];
+}
