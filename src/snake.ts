@@ -32,7 +32,7 @@ export class SnakePart {
 
         // Enhanced glow effect
         ctx.shadowColor = c;
-        ctx.shadowBlur = 25;
+        ctx.shadowBlur = 15;
 
         // Draw connection to next segment if it exists
         if (nextPart) {
@@ -63,37 +63,51 @@ export class SnakePart {
             ctx.translate(x + size/2, y + size/2);
             ctx.rotate(angle);
 
-            // Smoother connection with curved edges
+            // Sharp angular connection
             const length = Math.sqrt(dx*dx + dy*dy);
             const width = 42;
             ctx.beginPath();
             ctx.moveTo(-5, -width/2);
             ctx.lineTo(length + 5, -width/2);
-            ctx.quadraticCurveTo(length + 15, 0, length + 5, width/2);
+            ctx.lineTo(length + 15, 0);
+            ctx.lineTo(length + 5, width/2);
             ctx.lineTo(-5, width/2);
-            ctx.quadraticCurveTo(-15, 0, -5, -width/2);
+            ctx.lineTo(-15, 0);
+            ctx.closePath();
             ctx.fill();
 
             ctx.restore();
         }
 
         // Create dynamic gradient for the main segment body
-        const gradient = ctx.createRadialGradient(
-            x + size/2 - 15, y + size/2 - 15, 0,
-            x + size/2, y + size/2, size/1.2
+        const gradient = ctx.createLinearGradient(
+            x, y,
+            x + size, y + size
         );
         gradient.addColorStop(0, shadeColor(c, 40));
         gradient.addColorStop(0.5, c);
         gradient.addColorStop(1, shadeColor(c, -20));
 
-        // Draw main body with rounded corners
+        // Draw hexagonal body
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        const radius = 24;
-        ctx.roundRect(x + padding, y + padding, size - padding*2, size - padding*2, radius);
+        const centerX = x + size/2;
+        const centerY = y + size/2;
+        const radius = size/2 - padding;
+        for (let i = 0; i < 6; i++) {
+            const angle = i * Math.PI / 3 - Math.PI / 6;
+            const px = centerX + radius * Math.cos(angle);
+            const py = centerY + radius * Math.sin(angle);
+            if (i === 0) {
+                ctx.moveTo(px, py);
+            } else {
+                ctx.lineTo(px, py);
+            }
+        }
+        ctx.closePath();
         ctx.fill();
 
-        // Add details for head segment
+        // Add tech-inspired details
         if (isHead) {
             // Add metallic shine effect
             const shineGradient = ctx.createLinearGradient(
@@ -101,13 +115,33 @@ export class SnakePart {
                 x + size - padding, y + size - padding
             );
             shineGradient.addColorStop(0, 'rgba(255,255,255,0.2)');
-            shineGradient.addColorStop(0.5, 'rgba(255,255,255,0.3)');
+            shineGradient.addColorStop(0.5, 'rgba(255,255,255,0.1)');
             shineGradient.addColorStop(1, 'rgba(255,255,255,0)');
 
             ctx.fillStyle = shineGradient;
             ctx.beginPath();
-            ctx.roundRect(x + padding, y + padding, size - padding*2, size - padding*2, radius);
+            for (let i = 0; i < 6; i++) {
+                const angle = i * Math.PI / 3 - Math.PI / 6;
+                const px = centerX + radius * Math.cos(angle);
+                const py = centerY + radius * Math.sin(angle);
+                if (i === 0) {
+                    ctx.moveTo(px, py);
+                } else {
+                    ctx.lineTo(px, py);
+                }
+            }
+            ctx.closePath();
             ctx.fill();
+
+            // Add tech pattern
+            ctx.strokeStyle = `rgba(255,255,255,0.15)`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(centerX - radius/2, centerY);
+            ctx.lineTo(centerX + radius/2, centerY);
+            ctx.moveTo(centerX, centerY - radius/2);
+            ctx.lineTo(centerX, centerY + radius/2);
+            ctx.stroke();
         }
 
         // Reset shadow
@@ -362,7 +396,7 @@ export class Snake {
         const x = head.lerpX * 50;
         const y = head.lerpY * 50;
         const size = 50;
-        const eyeSize = 9;
+        const eyeSize = 8;
         const eyeOffset = 15;
         const eyeY = y + eyeOffset;
 
@@ -371,42 +405,61 @@ export class Snake {
         ctx.shadowBlur = 15;
         ctx.fillStyle = "#fff";
 
-        // Draw eyes
-        ctx.beginPath();
-        ctx.arc(x + eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
-        ctx.arc(x + size - eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
-        ctx.fill();
+        // Draw diamond-shaped eyes
+        const drawDiamondEye = (centerX: number, centerY: number) => {
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY - eyeSize/2);
+            ctx.lineTo(centerX + eyeSize/2, centerY);
+            ctx.lineTo(centerX, centerY + eyeSize/2);
+            ctx.lineTo(centerX - eyeSize/2, centerY);
+            ctx.closePath();
+            ctx.fill();
+        };
+
+        drawDiamondEye(x + eyeOffset, eyeY);
+        drawDiamondEye(x + size - eyeOffset, eyeY);
 
         // Add pupils that follow movement direction
         let pupilX = 0;
         let pupilY = 0;
 
-        if (this.dir === 'l') pupilX = -3;
-        if (this.dir === 'r') pupilX = 3;
-        if (this.dir === 'u') pupilY = -3;
-        if (this.dir === 'd') pupilY = 3;
+        if (this.dir === 'l') pupilX = -2;
+        if (this.dir === 'r') pupilX = 2;
+        if (this.dir === 'u') pupilY = -2;
+        if (this.dir === 'd') pupilY = 2;
 
         ctx.shadowBlur = 0;
-        const pupilGradient = ctx.createRadialGradient(
-            x + eyeOffset, eyeY, 0,
-            x + eyeOffset, eyeY, eyeSize/1.5
-        );
-        pupilGradient.addColorStop(0, '#444');
-        pupilGradient.addColorStop(1, '#000');
-        ctx.fillStyle = pupilGradient;
+        ctx.fillStyle = '#000';
 
-        ctx.beginPath();
-        ctx.arc(x + eyeOffset + pupilX, eyeY + pupilY, eyeSize/1.8, 0, Math.PI * 2);
-        ctx.arc(x + size - eyeOffset + pupilX, eyeY + pupilY, eyeSize/1.8, 0, Math.PI * 2);
-        ctx.fill();
+        // Draw diamond-shaped pupils
+        const drawPupil = (centerX: number, centerY: number) => {
+            ctx.beginPath();
+            const pupilSize = eyeSize/2.5;
+            ctx.moveTo(centerX + pupilX, centerY + pupilY - pupilSize/2);
+            ctx.lineTo(centerX + pupilX + pupilSize/2, centerY + pupilY);
+            ctx.lineTo(centerX + pupilX, centerY + pupilY + pupilSize/2);
+            ctx.lineTo(centerX + pupilX - pupilSize/2, centerY + pupilY);
+            ctx.closePath();
+            ctx.fill();
+        };
 
-        // Add eye shine
+        drawPupil(x + eyeOffset, eyeY);
+        drawPupil(x + size - eyeOffset, eyeY);
+
+        // Add eye shine as small triangles
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
         const shineSize = 3;
-        ctx.beginPath();
-        ctx.arc(x + eyeOffset - 2, eyeY - 2, shineSize, 0, Math.PI * 2);
-        ctx.arc(x + size - eyeOffset - 2, eyeY - 2, shineSize, 0, Math.PI * 2);
-        ctx.fill();
+        const drawShine = (centerX: number, centerY: number) => {
+            ctx.beginPath();
+            ctx.moveTo(centerX - 2, centerY - 2);
+            ctx.lineTo(centerX - 2 + shineSize, centerY - 2);
+            ctx.lineTo(centerX - 2, centerY - 2 + shineSize);
+            ctx.closePath();
+            ctx.fill();
+        };
+
+        drawShine(x + eyeOffset, eyeY);
+        drawShine(x + size - eyeOffset, eyeY);
     }
 
     drawGameOver(ctx: CanvasRenderingContext2D, progress: number) {
