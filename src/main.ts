@@ -94,33 +94,35 @@ function gameLoop(currentTime: number) {
     snake.processInput(keys);
     snake.update(deltaTime);
 
-    // Check for food collision
-    const head = snake.rects[0];
-    if (head.targetX === currentFood.x && head.targetY === currentFood.y) {
-        const foodX = currentFood.x * 50 + 25;
-        const foodY = currentFood.y * 50 + 25;
+    // Check for food collision if game is not over
+    if (!snake.isGameOver) {
+        const head = snake.rects[0];
+        if (head.targetX === currentFood.x && head.targetY === currentFood.y) {
+            const foodX = currentFood.x * 50 + 25;
+            const foodY = currentFood.y * 50 + 25;
 
-        // Store the food type for transition effect
-        snake.lastFoodType = currentFood;
-        snake.transitionTime = snake.transitionDuration;
-        snake.effectRotation = 0;
+            // Store the food type for transition effect
+            snake.lastFoodType = currentFood;
+            snake.transitionTime = snake.transitionDuration;
+            snake.effectRotation = 0;
 
-        // Create food-specific eat effect
-        const newParticles = currentFood.createEatEffect(foodX, foodY);
-        particles.push(...newParticles);
+            // Create food-specific eat effect
+            const newParticles = currentFood.createEatEffect(foodX, foodY);
+            particles.push(...newParticles);
 
-        // Add flash effect
-        glowIntensity = 40;
+            // Add flash effect
+            glowIntensity = 40;
 
-        // Add new tail segment
-        const lastPos = snake.rects[snake.rects.length - 1];
-        snake.grow({ x: lastPos.targetX, y: lastPos.targetY });
+            // Add new tail segment
+            const lastPos = snake.rects[snake.rects.length - 1];
+            snake.grow({ x: lastPos.targetX, y: lastPos.targetY });
 
-        // Update score based on food type
-        snake.score += currentFood.points;
+            // Update score based on food type
+            snake.score += currentFood.points;
 
-        // Spawn new food
-        spawnNewFood();
+            // Spawn new food
+            spawnNewFood();
+        }
     }
 
     snake.draw(ctx);
@@ -133,6 +135,15 @@ requestAnimationFrame(gameLoop);
 
 // Set up keyboard input handling
 window.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && snake.isGameOver) {
+        // Reset the game
+        snake.reset(randInt(10), randInt(10));
+        particles = [];
+        glowIntensity = 0;
+        spawnNewFood();
+        return;
+    }
+
     keys = {};
     keys[e.key] = true;
 });

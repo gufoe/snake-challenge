@@ -180,6 +180,9 @@ export class Snake {
     dir: "l" | "u" | "d" | "r" = "l";
     moveTimer = 0;
     moveInterval = 150;
+    isGameOver = false;
+    gameOverTime = 0;
+    gameOverDuration = 1000;
 
     // Add transition properties
     transitionTime = 0;
@@ -346,6 +349,12 @@ export class Snake {
         if (this.rects.length > 0) {
             this.drawHeadDetails(ctx);
         }
+
+        // Draw game over screen
+        if (this.isGameOver) {
+            const progress = 1 - (this.gameOverTime / this.gameOverDuration);
+            this.drawGameOver(ctx, progress);
+        }
     }
 
     drawHeadDetails(ctx: CanvasRenderingContext2D) {
@@ -400,6 +409,38 @@ export class Snake {
         ctx.fill();
     }
 
+    drawGameOver(ctx: CanvasRenderingContext2D, progress: number) {
+        // Fade in background
+        ctx.fillStyle = `rgba(0, 0, 0, ${0.7 * progress})`;
+        ctx.fillRect(0, 0, 500, 500);
+
+        // Set up text properties
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Draw "GAME OVER" text with glow effect
+        ctx.shadowColor = '#ff4444';
+        ctx.shadowBlur = 20 * progress;
+        ctx.fillStyle = '#ff4444';
+        ctx.font = 'bold 60px Arial';
+        ctx.fillText('GAME OVER', 250, 200);
+
+        // Draw score
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 10 * progress;
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 30px Arial';
+        ctx.fillText(`Score: ${this.score}`, 250, 270);
+
+        // Draw restart instruction with pulsing effect
+        const pulseScale = 1 + Math.sin(Date.now() / 500) * 0.1;
+        ctx.font = `${20 * pulseScale}px Arial`;
+        ctx.fillText('Press ENTER to restart', 250, 350);
+
+        // Reset shadow
+        ctx.shadowBlur = 0;
+    }
+
     processInput(keys: { [key: string]: boolean }) {
         if ((keys["a"] || keys["ArrowLeft"]) && this.dir != "r") {
             this.dir = "l";
@@ -428,8 +469,8 @@ export class Snake {
 
         // Check for collision with snake body
         if (this.rects.some(r => r.targetX === newX && r.targetY === newY)) {
-            alert("Game Over!");
-            location.reload();
+            this.isGameOver = true;
+            this.gameOverTime = this.gameOverDuration;
             return;
         }
 
@@ -452,6 +493,11 @@ export class Snake {
     }
 
     update(deltaTime: number) {
+        if (this.isGameOver) {
+            this.gameOverTime = Math.max(0, this.gameOverTime - deltaTime);
+            return;
+        }
+
         this.moveTimer += deltaTime;
         if (this.moveTimer >= this.moveInterval) {
             this.moveTimer = 0;
@@ -467,5 +513,20 @@ export class Snake {
         const newTail = new SnakePart(lastPos.x, lastPos.y);
         newTail.setTarget(lastPos.x, lastPos.y);
         this.rects.push(newTail);
+    }
+
+    reset(x: number, y: number) {
+        this.rects = [
+            new SnakePart(x, y),
+            new SnakePart(x + 1, y)
+        ];
+        this.score = 0;
+        this.dir = "l";
+        this.moveTimer = 0;
+        this.transitionTime = 0;
+        this.lastFoodType = null;
+        this.effectRotation = 0;
+        this.isGameOver = false;
+        this.gameOverTime = 0;
     }
 }
