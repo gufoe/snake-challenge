@@ -1,7 +1,7 @@
 import { Snake } from './snake';
-import { Food, foodTypes } from './food';
+import { Food, foodTypes, StarFood, RainbowFood, CrystalFood, PulsarFood } from './food';
 import { Particle } from './particle';
-import { Rect, drawRect, randInt, drawGrid } from './utils';
+import { Rect, drawRect, randInt } from './utils';
 import "./style.css";
 
 // Set up the canvas element in the HTML
@@ -80,6 +80,7 @@ let glowIntensity = 0;
 let keys: { [key: string]: boolean } = {};
 let currentFood: Food;
 let currentFoodIndex = Math.floor(Math.random() * foodTypes.length);
+let nextFoodType: Food;
 
 // Add ambient particles
 class AmbientParticle {
@@ -88,8 +89,9 @@ class AmbientParticle {
     size: number;
     opacity: number;
     speed: number;
-    color: string;
     pulse: number;
+    angle: number = Math.random() * Math.PI * 2;
+    rotationSpeed: number = (Math.random() - 0.5) * 0.02;
 
     constructor(public x: number, public y: number) {
         this.vx = (Math.random() - 0.5) * 0.5;
@@ -97,10 +99,7 @@ class AmbientParticle {
         this.size = Math.random() * 4 + 1;
         this.opacity = Math.random() * 0.4 + 0.1;
         this.speed = Math.random() * 0.3 + 0.1;
-        // Random color between green and cyan
-        const hue = Math.random() * 60 + 120; // 120-180 range (green to cyan)
-        this.color = `hsla(${hue}, 70%, 50%`;
-        this.pulse = Math.random() * Math.PI * 2; // Random start phase
+        this.pulse = Math.random() * Math.PI * 2;
     }
 
     update() {
@@ -126,22 +125,92 @@ class AmbientParticle {
         this.pulse += 0.02;
         const pulseOpacity = this.opacity * (0.7 + 0.3 * Math.sin(this.pulse));
         this.currentOpacity = pulseOpacity;
+
+        // Rotate
+        this.angle += this.rotationSpeed;
     }
 
     currentOpacity: number = 0;
 
     draw(ctx: CanvasRenderingContext2D) {
-        ctx.beginPath();
-        const gradient = ctx.createRadialGradient(
-            this.x, this.y, 0,
-            this.x, this.y, this.size * 2
-        );
-        gradient.addColorStop(0, `${this.color}, ${this.currentOpacity})`);
-        gradient.addColorStop(0.6, `${this.color}, ${this.currentOpacity * 0.3})`);
-        gradient.addColorStop(1, `${this.color}, 0)`);
-        ctx.fillStyle = gradient;
-        ctx.arc(this.x, this.y, this.size * 2, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+
+        // Get current food type for styling
+        if (currentFood instanceof StarFood) {
+            // Star-shaped particles
+            const points = 5;
+            const outerRadius = this.size * 2;
+            const innerRadius = this.size;
+
+            ctx.beginPath();
+            for (let i = 0; i < points * 2; i++) {
+                const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                const angle = (i * Math.PI) / points;
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, outerRadius);
+            gradient.addColorStop(0, `rgba(255, 87, 34, ${this.currentOpacity})`);
+            gradient.addColorStop(1, `rgba(255, 87, 34, 0)`);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+        } else if (currentFood instanceof RainbowFood) {
+            // Rainbow particles
+            const hue = (Date.now() / 20 + this.x + this.y) % 360;
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size * 2);
+            gradient.addColorStop(0, `hsla(${hue}, 100%, 50%, ${this.currentOpacity})`);
+            gradient.addColorStop(1, `hsla(${hue}, 100%, 50%, 0)`);
+
+            ctx.beginPath();
+            ctx.arc(0, 0, this.size * 2, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+        } else if (currentFood instanceof CrystalFood) {
+            // Crystal-shaped particles
+            ctx.beginPath();
+            ctx.moveTo(-this.size, 0);
+            ctx.lineTo(0, -this.size * 2);
+            ctx.lineTo(this.size, 0);
+            ctx.lineTo(0, this.size * 2);
+            ctx.closePath();
+
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size * 2);
+            gradient.addColorStop(0, `rgba(100, 181, 246, ${this.currentOpacity})`);
+            gradient.addColorStop(0.5, `rgba(100, 181, 246, ${this.currentOpacity * 0.5})`);
+            gradient.addColorStop(1, `rgba(100, 181, 246, 0)`);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+        } else if (currentFood instanceof PulsarFood) {
+            // Pulsar particles
+            const size = this.size * (1 + Math.sin(this.pulse) * 0.3);
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 2, 0, Math.PI * 2);
+
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 2);
+            gradient.addColorStop(0, `rgba(156, 39, 176, ${this.currentOpacity})`);
+            gradient.addColorStop(0.5, `rgba(156, 39, 176, ${this.currentOpacity * 0.3})`);
+            gradient.addColorStop(1, `rgba(156, 39, 176, 0)`);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+        } else {
+            // Default particles
+            ctx.beginPath();
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size * 2);
+            gradient.addColorStop(0, `rgba(76, 175, 80, ${this.currentOpacity})`);
+            gradient.addColorStop(0.6, `rgba(76, 175, 80, ${this.currentOpacity * 0.3})`);
+            gradient.addColorStop(1, `rgba(76, 175, 80, 0)`);
+            ctx.fillStyle = gradient;
+            ctx.arc(0, 0, this.size * 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
     }
 }
 
@@ -169,8 +238,17 @@ const ambientParticles: AmbientParticle[] = [
     })
 ];
 
-// Create the snake
+// Initialize first food
+const initialFoodType = foodTypes[currentFoodIndex];
+currentFood = new initialFoodType(randInt(10), randInt(10));
+
+// Create the snake and initialize its style with current food
 const snake = new Snake(randInt(10), randInt(10));
+snake.lastFoodType = currentFood;
+snake.transitionTime = snake.transitionDuration;
+
+// Now spawn the next food
+spawnNewFood();
 
 // Set up keyboard controls
 window.addEventListener("keydown", function (e) {
@@ -180,6 +258,9 @@ window.addEventListener("keydown", function (e) {
         particles = [];
         glowIntensity = 0;
         spawnNewFood();
+        // Reset snake style to match current food
+        snake.lastFoodType = currentFood;
+        snake.transitionTime = snake.transitionDuration;
         return;
     }
 
@@ -200,6 +281,9 @@ canvas.addEventListener('touchstart', (e) => {
         particles = [];
         glowIntensity = 0;
         spawnNewFood();
+        // Reset snake style to match current food
+        snake.lastFoodType = currentFood;
+        snake.transitionTime = snake.transitionDuration;
         return;
     }
 
@@ -247,7 +331,7 @@ document.body.addEventListener('touchmove', (e) => {
     e.preventDefault();
 }, { passive: false });
 
-// Modify spawn function to cycle through food types
+// Modify spawn function to handle next food preview
 function spawnNewFood() {
     let x: number, y: number;
     do {
@@ -255,14 +339,23 @@ function spawnNewFood() {
         y = randInt(10);
     } while (snake.rects.some((r) => r.targetX == x && r.targetY == y));
 
-    // Cycle to next food type
-    currentFoodIndex = (currentFoodIndex + 1) % foodTypes.length;
-    const FoodType = foodTypes[currentFoodIndex];
-    currentFood = new FoodType(x, y);
-}
+    // Current food becomes the previously prepared next food
+    if (nextFoodType) {
+        currentFood = nextFoodType;
+        currentFood.x = x;
+        currentFood.y = y;
+    } else {
+        // First food spawn
+        currentFoodIndex = Math.floor(Math.random() * foodTypes.length);
+        const FoodType = foodTypes[currentFoodIndex];
+        currentFood = new FoodType(x, y);
+    }
 
-// Initialize first food
-spawnNewFood();
+    // Prepare next food
+    currentFoodIndex = (currentFoodIndex + 1) % foodTypes.length;
+    const NextFoodType = foodTypes[currentFoodIndex];
+    nextFoodType = new NextFoodType(0, 0); // Position will be set when it becomes current
+}
 
 /**
  * Draws the food with enhanced animations and effects
@@ -277,6 +370,33 @@ function drawFood() {
 // Track time for smooth animation
 let lastTime = performance.now();
 
+// Add screen shake system
+let screenShake = {
+    intensity: 0,
+    duration: 0,
+    decay: 0.9, // How quickly the shake effect fades
+    offsetX: 0,
+    offsetY: 0,
+    update() {
+        if (this.duration > 0) {
+            this.duration--;
+            this.intensity *= this.decay;
+
+            // Random shake offset
+            this.offsetX = (Math.random() - 0.5) * this.intensity;
+            this.offsetY = (Math.random() - 0.5) * this.intensity;
+        } else {
+            this.intensity = 0;
+            this.offsetX = 0;
+            this.offsetY = 0;
+        }
+    },
+    start(intensity: number, duration: number) {
+        this.intensity = intensity;
+        this.duration = duration;
+    }
+};
+
 /**
  * Main game loop
  * Updates and renders the game state each frame
@@ -285,8 +405,15 @@ function gameLoop(currentTime: number) {
     const deltaTime = currentTime - lastTime;
     lastTime = currentTime;
 
+    // Update screen shake
+    screenShake.update();
+
     // Clear and draw background
     drawRect(ctx, map, "#1A1A1A");
+
+    // Apply screen shake transform
+    ctx.save();
+    ctx.translate(screenShake.offsetX, screenShake.offsetY);
 
     // Draw ambient particles with depth effect
     ambientParticles.forEach(p => {
@@ -332,7 +459,7 @@ function gameLoop(currentTime: number) {
             const foodX = currentFood.x * 50 + 25;
             const foodY = currentFood.y * 50 + 25;
 
-            // Store the food type for transition effect
+            // Store the CURRENT food type for transition effect
             snake.lastFoodType = currentFood;
             snake.transitionTime = snake.transitionDuration;
             snake.effectRotation = 0;
@@ -348,6 +475,9 @@ function gameLoop(currentTime: number) {
             // Add flash effect
             glowIntensity = 40;
 
+            // Trigger screen shake
+            screenShake.start(15, 10);
+
             // Add new tail segment
             const lastPos = snake.rects[snake.rects.length - 1];
             snake.grow({ x: lastPos.targetX, y: lastPos.targetY });
@@ -361,6 +491,9 @@ function gameLoop(currentTime: number) {
     }
 
     snake.draw(ctx);
+
+    // Restore the canvas transform
+    ctx.restore();
 
     requestAnimationFrame(gameLoop);
 }

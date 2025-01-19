@@ -1,5 +1,4 @@
 import { Particle } from './particle';
-import { shadeColor } from './utils';
 
 export abstract class Food {
     x: number;
