@@ -6,7 +6,9 @@ import "./style.css";
 
 // Set up the canvas element in the HTML
 document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
-  <canvas id="canvas" width=500 height=500/>
+  <div class="game-container">
+    <canvas id="canvas" width=500 height=500></canvas>
+  </div>
 `;
 
 // Initialize canvas and context
@@ -27,6 +29,81 @@ let currentFoodIndex = Math.floor(Math.random() * foodTypes.length);
 
 // Create the snake
 const snake = new Snake(randInt(10), randInt(10));
+
+// Set up keyboard controls
+window.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && snake.isGameOver) {
+        // Reset the game
+        snake.reset(randInt(10), randInt(10));
+        particles = [];
+        glowIntensity = 0;
+        spawnNewFood();
+        return;
+    }
+
+    keys = {};
+    keys[e.key] = true;
+});
+
+// Swipe detection variables
+let touchStartX = 0;
+let touchStartY = 0;
+const minSwipeDistance = 30; // Minimum distance for a swipe
+
+// Prevent default touch behavior on the canvas
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (snake.isGameOver) {
+        snake.reset(randInt(10), randInt(10));
+        particles = [];
+        glowIntensity = 0;
+        spawnNewFood();
+        return;
+    }
+
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+
+    const deltaX = touchEndX - touchStartX;
+    const deltaY = touchEndY - touchStartY;
+
+    // Only process swipe if it's long enough
+    if (Math.abs(deltaX) > minSwipeDistance || Math.abs(deltaY) > minSwipeDistance) {
+        // Determine swipe direction
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+            // Horizontal swipe
+            keys = {};
+            if (deltaX > 0) {
+                keys['ArrowRight'] = true;
+            } else {
+                keys['ArrowLeft'] = true;
+            }
+        } else {
+            // Vertical swipe
+            keys = {};
+            if (deltaY > 0) {
+                keys['ArrowDown'] = true;
+            } else {
+                keys['ArrowUp'] = true;
+            }
+        }
+    }
+}, { passive: false });
+
+// Prevent page scrolling on mobile
+document.body.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+}, { passive: false });
 
 // Modify spawn function to cycle through food types
 function spawnNewFood() {
@@ -132,18 +209,3 @@ function gameLoop(currentTime: number) {
 
 // Start the game loop
 requestAnimationFrame(gameLoop);
-
-// Set up keyboard input handling
-window.addEventListener("keydown", function (e) {
-    if (e.key === "Enter" && snake.isGameOver) {
-        // Reset the game
-        snake.reset(randInt(10), randInt(10));
-        particles = [];
-        glowIntensity = 0;
-        spawnNewFood();
-        return;
-    }
-
-    keys = {};
-    keys[e.key] = true;
-});
