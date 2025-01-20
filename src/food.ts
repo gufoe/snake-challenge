@@ -93,10 +93,24 @@ export class StarFood extends Food {
 
 export class RainbowFood extends Food {
     private hue: number = 0;
+    private orbitAngle: number = 0;
 
     update() {
         super.update();
-        this.hue = (this.hue + 1) % 360;
+        this.hue = (this.hue + 1.5) % 360;
+        this.orbitAngle = (this.orbitAngle + 0.03) % (Math.PI * 2);
+    }
+
+    private drawPolygon(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, sides: number, rotation: number = 0) {
+        ctx.beginPath();
+        for (let i = 0; i < sides; i++) {
+            const angle = rotation + (i * Math.PI * 2) / sides;
+            const pointX = x + Math.cos(angle) * radius;
+            const pointY = y + Math.sin(angle) * radius;
+            if (i === 0) ctx.moveTo(pointX, pointY);
+            else ctx.lineTo(pointX, pointY);
+        }
+        ctx.closePath();
     }
 
     draw(ctx: CanvasRenderingContext2D) {
@@ -108,34 +122,85 @@ export class RainbowFood extends Food {
         ctx.rotate(this.rotation);
         ctx.scale(this.scale, this.scale);
 
-        ctx.shadowColor = `hsl(${this.hue}, 100%, 50%)`;
-        ctx.shadowBlur = this.glowIntensity;
+        // Enhanced glow effect
+        ctx.shadowColor = `hsl(${this.hue}, 100%, 60%)`;
+        ctx.shadowBlur = this.glowIntensity * 1.2;
 
-        // Draw spiral
-        for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2;
+        // Draw orbiting rainbow shapes
+        const orbCount = 6;
+        for (let i = 0; i < orbCount; i++) {
+            const angle = this.orbitAngle + (i / orbCount) * Math.PI * 2;
             const radius = 15;
             const x = Math.cos(angle) * radius;
             const y = Math.sin(angle) * radius;
 
-            ctx.beginPath();
-            ctx.arc(x, y, 8, 0, Math.PI * 2);
-            ctx.fillStyle = `hsl(${(this.hue + i * 60) % 360}, 100%, 50%)`;
+            // Draw connecting lines
+            if (i > 0) {
+                const prevAngle = this.orbitAngle + ((i - 1) / orbCount) * Math.PI * 2;
+                const prevX = Math.cos(prevAngle) * radius;
+                const prevY = Math.sin(prevAngle) * radius;
+
+                ctx.beginPath();
+                ctx.moveTo(prevX, prevY);
+                ctx.lineTo(x, y);
+                ctx.strokeStyle = `hsla(${(this.hue + i * 60) % 360}, 100%, 75%, 0.4)`;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+
+            // Draw alternating shapes
+            const shapeRotation = this.orbitAngle * 2 + (i * Math.PI * 2) / orbCount;
+            if (i % 3 === 0) {
+                // Triangle
+                this.drawPolygon(ctx, x, y, 10, 3, shapeRotation);
+            } else if (i % 3 === 1) {
+                // Square
+                this.drawPolygon(ctx, x, y, 8, 4, shapeRotation);
+            } else {
+                // Pentagon
+                this.drawPolygon(ctx, x, y, 8, 5, shapeRotation);
+            }
+
+            const gradient = ctx.createRadialGradient(x, y, 0, x, y, 10);
+            gradient.addColorStop(0, `hsla(${(this.hue + i * 60) % 360}, 100%, 90%, 1)`);
+            gradient.addColorStop(0.6, `hsla(${(this.hue + i * 60) % 360}, 100%, 60%, 1)`);
+            gradient.addColorStop(1, `hsla(${(this.hue + i * 60) % 360}, 100%, 45%, 1)`);
+            ctx.fillStyle = gradient;
             ctx.fill();
         }
+
+        // Draw center shape - rotating hexagon
+        this.drawPolygon(ctx, 0, 0, 10, 6, this.orbitAngle * 1.5);
+        const centerGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 10);
+        centerGradient.addColorStop(0, 'white');
+        centerGradient.addColorStop(0.5, `hsl(${this.hue}, 100%, 75%)`);
+        centerGradient.addColorStop(1, `hsl(${this.hue}, 100%, 50%)`);
+        ctx.fillStyle = centerGradient;
+        ctx.fill();
 
         ctx.restore();
     }
 
     createEatEffect(x: number, y: number): Particle[] {
         const particles: Particle[] = [];
+        // Create rainbow burst with different shapes
         for (let i = 0; i < 36; i++) {
             const hue = (this.hue + i * 10) % 360;
-            particles.push(new Particle(x, y, `hsl(${hue}, 100%, 50%)`, {
-                speed: 3,
-                size: 4,
-                life: 50,
-                shape: 'circle'
+            const shape = i % 2 === 0 ? 'star' : 'spark';
+            particles.push(new Particle(x, y, `hsl(${hue}, 100%, 60%)`, {
+                speed: 2.5 + Math.random(),
+                size: 4 + Math.random() * 4,
+                life: 45 + Math.random() * 15,
+                shape: shape
+            }));
+        }
+        // Add some sparkle particles
+        for (let i = 0; i < 8; i++) {
+            particles.push(new Particle(x, y, 'white', {
+                speed: 1 + Math.random() * 2,
+                size: 3,
+                life: 30,
+                shape: 'star'
             }));
         }
         return particles;
