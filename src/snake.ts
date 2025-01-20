@@ -212,6 +212,7 @@ export class Snake {
     score = 0;
     rects: SnakePart[] = [];
     dir: "l" | "u" | "d" | "r" = "l";
+    nextDir: "l" | "u" | "d" | "r" = "l";
     moveTimer = 0;
     moveInterval = 150;
     baseInterval = 150;  // Store the initial interval
@@ -629,17 +630,18 @@ export class Snake {
     }
 
     processInput(keys: { [key: string]: boolean }) {
+        // Only allow changing nextDir, actual direction change happens during move
         if ((keys["a"] || keys["ArrowLeft"]) && this.dir != "r") {
-            this.dir = "l";
+            this.nextDir = "l";
         }
         if ((keys["d"] || keys["ArrowRight"]) && this.dir != "l") {
-            this.dir = "r";
+            this.nextDir = "r";
         }
         if ((keys["w"] || keys["ArrowUp"]) && this.dir != "d") {
-            this.dir = "u";
+            this.nextDir = "u";
         }
         if ((keys["s"] || keys["ArrowDown"]) && this.dir != "u") {
-            this.dir = "d";
+            this.nextDir = "d";
         }
     }
 
@@ -648,6 +650,9 @@ export class Snake {
         let newX = head.targetX;
         let newY = head.targetY;
 
+        // Only update direction when actually moving
+        this.dir = this.nextDir;
+
         // Update position with wrap-around
         if (this.dir == "l") newX = (newX - 1 + 10) % 10;
         if (this.dir == "r") newX = (newX + 1) % 10;
@@ -655,7 +660,11 @@ export class Snake {
         if (this.dir == "d") newY = (newY + 1) % 10;
 
         // Check for collision with snake body
-        if (this.rects.some(r => r.targetX === newX && r.targetY === newY)) {
+        // Skip the head (index 0) and check segments that have completed their movement
+        if (this.rects.length > 2 && this.rects.slice(1).some(r => {
+            // Check against target position since that's the actual grid position
+            return r.targetX === newX && r.targetY === newY;
+        })) {
             this.isGameOver = true;
             this.gameOverTime = this.gameOverDuration;
             return;
