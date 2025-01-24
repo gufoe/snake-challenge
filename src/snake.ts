@@ -1,5 +1,227 @@
 import { Food, StarFood, RainbowFood, CrystalFood, PulsarFood } from './food';
-import { hexToRgb } from './utils';
+import { hexToRgb, randInt } from './utils';
+import { PowerUp, ExtraLifePowerUp, TimeSlowPowerUp, GhostPowerUp } from './powerup';
+import { Particle } from './particle';
+
+// Game state variables
+let canvas: HTMLCanvasElement;
+let ctx: CanvasRenderingContext2D;
+let lastTime: number;
+let snake: Snake;
+let currentFood: Food | null = null;
+let currentPowerUp: PowerUp | null = null;
+let powerUpSpawnTimer = 0;
+const powerUpSpawnInterval = 15000; // Spawn power-up every 15 seconds
+const powerUpTypes = [ExtraLifePowerUp, TimeSlowPowerUp, GhostPowerUp];
+let particles: Particle[] = []; // Initialize particles as an empty array
+
+// Camera shake effect variables
+let shakeTime = 0;
+let shakeIntensity = 0;
+const shakeDuration = 200; // Duration of shake in milliseconds
+const baseShakeAmount = 40; // Base intensity of the shake
+
+// Initialize the game
+function initGame() {
+    // Get canvas and context
+    canvas = document.querySelector('canvas')!;
+    ctx = canvas.getContext('2d')!;
+
+    // Initialize game state
+    lastTime = performance.now();
+    snake = new Snake(6, 10);
+    particles = []; // Reset particles array
+
+    // Set up keyboard input
+    const keys: { [key: string]: boolean } = {};
+
+    window.addEventListener('keydown', (e) => {
+        keys[e.key] = true;
+        snake.processInput(keys);
+
+        // Handle game restart
+        if (e.code === 'Space' && snake.isGameOver) {
+            snake.reset(6, 10);
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Prevent default behavior for arrow keys to avoid scrolling
+        if (e.key.startsWith('Arrow')) {
+            e.preventDefault();
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        keys[e.key] = false;
+    });
+
+    // Start game loop
+    requestAnimationFrame(gameLoop);
+}
+
+function gameLoop() {
+    const now = performance.now();
+    const dt = now - lastTime;
+    lastTime = now;
+
+    // Update shake effect
+    if (shakeTime > 0) {
+        shakeTime = Math.max(0, shakeTime - dt);
+    }
+
+    // Clear canvas
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Calculate shake offset with more intense values
+    let shakeOffsetX = 0;
+    let shakeOffsetY = 0;
+    if (shakeTime > 0) {
+        const shakeProgress = shakeTime / shakeDuration;
+        const currentIntensity = shakeIntensity * shakeProgress;
+        // Use multiple frequencies for more chaotic shake
+        shakeOffsetX = (
+            Math.sin(Date.now() / 20) * 1.5 + // Fast shake
+            Math.sin(Date.now() / 10) * 0.5   // Very fast shake
+        ) * currentIntensity;
+        shakeOffsetY = (
+            Math.cos(Date.now() / 25) * 1.5 + // Fast shake
+            Math.cos(Date.now() / 12) * 0.5   // Very fast shake
+        ) * currentIntensity;
+    }
+
+    // Center the game with shake effect
+    ctx.translate(
+        canvas.width / 2 - 300 + shakeOffsetX,
+        canvas.height / 2 - 525 + shakeOffsetY
+    );
+
+    // Draw background grid
+    ctx.strokeStyle = '#2a2a2a';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= 600; x += 50) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, 1050);
+        ctx.stroke();
+    }
+    for (let y = 0; y <= 1050; y += 50) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(600, y);
+        ctx.stroke();
+    }
+
+    // Update snake
+    snake.update(dt);
+
+    // Spawn food if needed
+    if (!currentFood) {
+        const foodX = randInt(12);
+        const foodY = randInt(21);
+        const foodType = Math.random();
+        if (foodType < 0.6) {
+            currentFood = new StarFood(foodX, foodY);
+        } else if (foodType < 0.8) {
+            currentFood = new RainbowFood(foodX, foodY);
+        } else if (foodType < 0.9) {
+            currentFood = new CrystalFood(foodX, foodY);
+        } else {
+            currentFood = new PulsarFood(foodX, foodY);
+        }
+    }
+
+    // Update power-up spawn timer
+    powerUpSpawnTimer -= dt;
+    if (powerUpSpawnTimer <= 0 && !currentPowerUp) {
+        powerUpSpawnTimer = powerUpSpawnInterval;
+        const powerUpX = randInt(12);
+        const powerUpY = randInt(21);
+        const powerUpType = powerUpTypes[randInt(powerUpTypes.length)];
+        currentPowerUp = new powerUpType(powerUpX, powerUpY);
+    }
+
+    // Check for food collision
+    if (currentFood && snake.checkFoodCollision(currentFood)) {
+        currentFood.createEatEffect(particles);
+        currentFood = null;
+
+        // Trigger shake effect based on score
+        shakeTime = shakeDuration;
+        // Calculate shake intensity based on score
+        shakeIntensity = snake.score <= 20
+            ? baseShakeAmount * (snake.score / 20) // Linear increase up to score 20
+            : baseShakeAmount + (baseShakeAmount * ((snake.score - 20) / 40) * 0.5); // Half intensity increase after 20
+
+        // Vibrate if supported (short, crisp vibration)
+        if ('vibrate' in navigator) {
+            navigator.vibrate([20, 15, 10]); // Three quick pulses
+        }
+    }
+
+    // Check for power-up collision
+    if (currentPowerUp && snake.rects[0].targetX === currentPowerUp.x && snake.rects[0].targetY === currentPowerUp.y) {
+        currentPowerUp.applyEffect(snake);
+        currentPowerUp.createCollectEffect(snake.rects[0].targetX, snake.rects[0].targetY);
+        currentPowerUp = null;
+        // Vibrate if supported (longer vibration for power-up)
+        if ('vibrate' in navigator) {
+            navigator.vibrate([40, 30, 20]); // Three stronger pulses
+        }
+    }
+
+    // Draw food
+    if (currentFood) {
+        currentFood.draw(ctx);
+    }
+
+    // Draw power-up
+    if (currentPowerUp) {
+        currentPowerUp.draw(ctx);
+        currentPowerUp.update();
+        if (currentPowerUp.isExpired()) {
+            currentPowerUp = null;
+        }
+    }
+
+    // Update and draw particles
+    particles = particles.filter(p => p.life > 0);
+    particles.forEach(p => {
+        p.update();
+        p.draw(ctx);
+    });
+
+    // Draw snake
+    snake.draw(ctx, currentFood || snake.lastFoodType || new StarFood(0, 0));
+
+    // Draw score
+    ctx.fillStyle = '#fff';
+    ctx.font = '24px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Score: ${snake.score}`, 10, 30);
+
+    // Draw lives
+    ctx.fillText(`Lives: ${snake.lives}`, 10, 60);
+
+    // Restore the canvas transform
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    // Request next frame if game is not over
+    if (!snake.isGameOver) {
+        requestAnimationFrame(gameLoop);
+    } else {
+        // Draw game over screen
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#fff';
+        ctx.font = '48px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Game Over!', canvas.width / 2, canvas.height / 2 - 50);
+        ctx.font = '24px Arial';
+        ctx.fillText(`Final Score: ${snake.score}`, canvas.width / 2, canvas.height / 2 + 50);
+        ctx.fillText('Press Space to Restart', canvas.width / 2, canvas.height / 2 + 100);
+    }
+}
 
 export class SnakePart {
     // Current interpolated position (smooth movement)
@@ -39,16 +261,24 @@ export class SnakePart {
             const nx = nextPart.lerpX * 50;
             const ny = nextPart.lerpY * 50;
 
-            let dx = nx - x;
-            let dy = ny - y;
+            let dx = nextPart.lerpX - this.lerpX;
+            let dy = nextPart.lerpY - this.lerpY;
 
-            if (Math.abs(dx) > size * 2) dx = dx > 0 ? dx - 500 : dx + 500;
-            if (Math.abs(dy) > size * 2) dy = dy > 0 ? dy - 500 : dy + 500;
+            // Handle wrap-around for connections
+            if (Math.abs(dx) > 10) {
+                dx = dx > 0 ? dx - 20 : dx + 20;
+            }
+            if (Math.abs(dy) > 10) {
+                dy = dy > 0 ? dy - 20 : dy + 20;
+            }
+
+            dx *= 50; // Convert to pixel coordinates
+            dy *= 50;
 
             // Create more vibrant gradient for connection
             const gradient = ctx.createLinearGradient(
                 x + size/2, y + size/2,
-                x + size/2 + dx/2, y + size/2 + dy/2
+                x + size/2 + dx, y + size/2 + dy
             );
             gradient.addColorStop(0, c);
             gradient.addColorStop(0.2, shadeColor(c, 15));
@@ -164,13 +394,23 @@ export class SnakePart {
         let dy = this.targetY - this.y;
 
         // Handle wrap-around movement across screen edges
-        if (Math.abs(dx) > 5) {
-            if (dx > 0) dx -= 10;
-            else dx += 10;
+        if (Math.abs(dx) > 6) {
+            if (dx > 0) dx -= 12;
+            else dx += 12;
+            // Adjust the current position for smoother wrap-around
+            if (this.progress === 0) {
+                if (dx < 0) this.x = 12;
+                else this.x = -1;
+            }
         }
-        if (Math.abs(dy) > 5) {
-            if (dy > 0) dy -= 10;
-            else dy += 10;
+        if (Math.abs(dy) > 10) {
+            if (dy > 0) dy -= 21;
+            else dy += 21;
+            // Adjust the current position for smoother wrap-around
+            if (this.progress === 0) {
+                if (dy < 0) this.y = 21;
+                else this.y = -1;
+            }
         }
 
         // Update interpolated position
@@ -178,10 +418,10 @@ export class SnakePart {
         this.lerpY = this.y + dy * this.progress;
 
         // Keep interpolated positions within bounds
-        if (this.lerpX < 0) this.lerpX += 10;
-        if (this.lerpX > 9) this.lerpX -= 10;
-        if (this.lerpY < 0) this.lerpY += 10;
-        if (this.lerpY > 9) this.lerpY -= 10;
+        if (this.lerpX < 0) this.lerpX += 12;
+        if (this.lerpX >= 12) this.lerpX -= 12;
+        if (this.lerpY < 0) this.lerpY += 21;
+        if (this.lerpY >= 21) this.lerpY -= 21;
     }
 
     /**
@@ -210,6 +450,7 @@ function shadeColor(color: string, percent: number) {
 
 export class Snake {
     score = 0;
+    lives = 1;
     rects: SnakePart[] = [];
     dir: "l" | "u" | "d" | "r" = "l";
     nextDir: "l" | "u" | "d" | "r" = "l";
@@ -221,6 +462,7 @@ export class Snake {
     isGameOver = false;
     gameOverTime = 0;
     gameOverDuration = 1000;
+    isGhostMode = false;
 
     // Add transition properties
     transitionTime = 0;
@@ -332,7 +574,7 @@ export class Snake {
         return undefined;
     }
 
-    draw(ctx: CanvasRenderingContext2D) {
+    draw(ctx: CanvasRenderingContext2D, currentFood: Food) {
         // Only update rotation for effects
         this.effectRotation += 0.1;
 
@@ -389,7 +631,7 @@ export class Snake {
 
         // Draw head details last (eyes, etc.)
         if (this.rects.length > 0) {
-            this.drawHeadDetails(ctx);
+            this.drawHeadDetails(ctx, currentFood);
         }
 
         // Draw in-game score
@@ -404,7 +646,7 @@ export class Snake {
         }
     }
 
-    drawHeadDetails(ctx: CanvasRenderingContext2D) {
+    drawHeadDetails(ctx: CanvasRenderingContext2D, currentFood: Food) {
         const head = this.rects[0];
         const x = head.lerpX * 50;
         const y = head.lerpY * 50;
@@ -474,7 +716,7 @@ export class Snake {
     }
 
     private drawScore(ctx: CanvasRenderingContext2D) {
-        const x = 460;
+        const x = 960;
         const y = 40;
         const hexRadius = 25;
 
@@ -536,22 +778,29 @@ export class Snake {
 
     drawGameOver(ctx: CanvasRenderingContext2D, progress: number) {
         // Dark overlay with radial gradient
-        const gradient = ctx.createRadialGradient(250, 250, 0, 250, 250, 400);
+        const gradient = ctx.createRadialGradient(300, 525, 0, 300, 525, 600);
         gradient.addColorStop(0, `rgba(0, 0, 0, ${0.5 * progress})`);
         gradient.addColorStop(1, `rgba(0, 0, 0, ${0.9 * progress})`);
         ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 500, 500);
+        ctx.fillRect(0, 0, 600, 1050);
 
         // Set up text properties
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
+        // Calculate shake intensity based on score
+        const scoreShake = this.score <= 20
+            ? (this.score / 20) * baseShakeAmount * 4
+            : baseShakeAmount * 4 + ((this.score - 20) / 40) * baseShakeAmount * 3;
+
+        // Add both horizontal and vertical shake with different frequencies
+        const horizontalShake = Math.sin(Date.now() / 20) * scoreShake * progress;
+        const verticalShake = Math.cos(Date.now() / 25) * (scoreShake * 0.8) * progress;
 
         // Draw "GAME OVER" text with enhanced effects
         ctx.save();
-        const shake = Math.sin(Date.now() / 100) * 2 * progress;
-        ctx.translate(250 + shake, 200);
-        const scale = 1 + Math.sin(Date.now() / 500) * 0.05;
+        ctx.translate(300 + horizontalShake, 450 + verticalShake);
+        const scale = 1 + Math.sin(Date.now() / 200) * 0.15;
         ctx.scale(scale, scale);
 
         // Multiple shadow layers for stronger glow
@@ -569,7 +818,7 @@ export class Snake {
 
         // Draw score with growing effect
         ctx.save();
-        ctx.translate(250, 270);
+        ctx.translate(300, 550);
         const scoreScale = Math.min(1, progress * 1.5);
         ctx.scale(scoreScale, scoreScale);
 
@@ -582,7 +831,7 @@ export class Snake {
 
         // Draw restart instruction with floating effect
         ctx.save();
-        ctx.translate(250, 350 + Math.sin(Date.now() / 400) * 5);
+        ctx.translate(300, 650 + Math.sin(Date.now() / 400) * 5);
         const pulseScale = 1 + Math.sin(Date.now() / 500) * 0.1;
         ctx.scale(pulseScale, pulseScale);
 
@@ -592,10 +841,10 @@ export class Snake {
         ctx.textAlign = 'right';
         ctx.fillText('Press', -40, 0);
 
-        // Draw ENTER key centered
+        // Draw SPACE key centered
         ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 * progress})`;
         ctx.lineWidth = 2;
-        this.drawKey(ctx, 0, 0, 70, 25, 'ENTER');
+        this.drawKey(ctx, 0, 0, 70, 25, 'SPACE');
 
         // Draw "to restart" text
         ctx.textAlign = 'left';
@@ -654,17 +903,29 @@ export class Snake {
         this.dir = this.nextDir;
 
         // Update position with wrap-around
-        if (this.dir == "l") newX = (newX - 1 + 10) % 10;
-        if (this.dir == "r") newX = (newX + 1) % 10;
-        if (this.dir == "u") newY = (newY - 1 + 10) % 10;
-        if (this.dir == "d") newY = (newY + 1) % 10;
+        if (this.dir == "l") newX = (newX - 1 + 12) % 12;
+        if (this.dir == "r") newX = (newX + 1) % 12;
+        if (this.dir == "u") newY = (newY - 1 + 21) % 21;
+        if (this.dir == "d") newY = (newY + 1) % 21;
 
         // Check for collision with snake body
-        // Skip the head (index 0) and check segments that have completed their movement
-        if (this.rects.length > 2 && this.rects.slice(1).some(r => {
-            // Check against target position since that's the actual grid position
+        if (!this.isGhostMode && this.rects.length > 2 && this.rects.slice(1).some(r => {
             return r.targetX === newX && r.targetY === newY;
         })) {
+            if (this.lives > 1) {
+                this.lives--;
+                // Reset snake position but keep score and length
+                const oldLength = this.rects.length;
+                this.rects = [
+                    new SnakePart(randInt(12), randInt(21)),
+                    new SnakePart(this.rects[0].targetX + 1, this.rects[0].targetY)
+                ];
+                // Regrow to previous length
+                for (let i = 2; i < oldLength; i++) {
+                    this.grow({ x: this.rects[i-1].targetX, y: this.rects[i-1].targetY });
+                }
+                return;
+            }
             this.isGameOver = true;
             this.gameOverTime = this.gameOverDuration;
             return;
@@ -736,5 +997,26 @@ export class Snake {
         this.effectRotation = 0;
         this.isGameOver = false;
         this.gameOverTime = 0;
+    }
+
+    checkFoodCollision(food: Food): boolean {
+        if (this.isGameOver) return false;
+        const head = this.rects[0];
+        if (head.targetX === food.x && head.targetY === food.y) {
+            // Add new tail segment
+            const lastPos = this.rects[this.rects.length - 1];
+            this.grow({ x: lastPos.targetX, y: lastPos.targetY });
+
+            // Update score based on food type
+            this.score += food.points;
+
+            // Update snake style to match the new current food
+            this.lastFoodType = food;
+            this.transitionTime = this.transitionDuration;
+            this.effectRotation = 0;
+
+            return true;
+        }
+        return false;
     }
 }

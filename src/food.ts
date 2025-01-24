@@ -21,7 +21,7 @@ export abstract class Food {
     }
 
     abstract draw(ctx: CanvasRenderingContext2D): void;
-    abstract createEatEffect(x: number, y: number): Particle[];
+    abstract createEatEffect(particles: Particle[]): void;
     abstract get points(): number;
 }
 
@@ -75,17 +75,31 @@ export class StarFood extends Food {
         ctx.restore();
     }
 
-    createEatEffect(x: number, y: number): Particle[] {
-        const particles: Particle[] = [];
-        for (let i = 0; i < 20; i++) {
-            particles.push(new Particle(x, y, 'rgb(255, 87, 34)', {
-                speed: 2,
-                size: 5,
-                life: 40,
-                shape: 'star'
+    createEatEffect(particles: Particle[]) {
+        // Main explosion
+        for (let i = 0; i < 40; i++) {
+            const angle = (i / 40) * Math.PI * 2;
+            particles.push(new Particle(this.x * 50 + 25, this.y * 50 + 25, 'rgb(255, 255, 100)', {
+                speed: 3 + Math.random() * 2,
+                size: 8 + Math.random() * 4,
+                life: 50 + Math.random() * 20,
+                shape: 'star',
+                angle,
+                spin: true,
+                trail: Math.random() < 0.3
             }));
         }
-        return particles;
+
+        // Sparkle burst
+        for (let i = 0; i < 30; i++) {
+            particles.push(new Particle(this.x * 50 + 25, this.y * 50 + 25, 'rgb(255, 255, 200)', {
+                speed: 2,
+                size: 4,
+                life: 30,
+                shape: 'spark',
+                shimmer: true
+            }));
+        }
     }
 
     get points() { return 1; }
@@ -181,29 +195,35 @@ export class RainbowFood extends Food {
         ctx.restore();
     }
 
-    createEatEffect(x: number, y: number): Particle[] {
-        const particles: Particle[] = [];
-        // Create rainbow burst with different shapes
-        for (let i = 0; i < 36; i++) {
-            const hue = (this.hue + i * 10) % 360;
-            const shape = i % 2 === 0 ? 'star' : 'spark';
-            particles.push(new Particle(x, y, `hsl(${hue}, 100%, 60%)`, {
-                speed: 2.5 + Math.random(),
-                size: 4 + Math.random() * 4,
-                life: 45 + Math.random() * 15,
-                shape: shape
+    createEatEffect(particles: Particle[]) {
+        // Rainbow spiral burst
+        for (let i = 0; i < 60; i++) {
+            const angle = (i / 60) * Math.PI * 4; // Two full rotations for spiral
+            const hue = (i / 60) * 360;
+            const shapes: ('triangle' | 'square' | 'pentagon')[] = ['triangle', 'square', 'pentagon'];
+            particles.push(new Particle(this.x * 50 + 25, this.y * 50 + 25, `hsl(${hue}, 100%, 60%)`, {
+                speed: 2 + (i / 60) * 3,
+                size: 6 + Math.random() * 4,
+                life: 40 + Math.random() * 20,
+                shape: shapes[Math.floor(Math.random() * shapes.length)],
+                angle,
+                spin: true,
+                rainbow: true,
+                trail: Math.random() < 0.3
             }));
         }
-        // Add some sparkle particles
-        for (let i = 0; i < 8; i++) {
-            particles.push(new Particle(x, y, 'white', {
+
+        // Sparkle particles
+        for (let i = 0; i < 30; i++) {
+            particles.push(new Particle(this.x * 50 + 25, this.y * 50 + 25, 'rgb(255, 255, 255)', {
                 speed: 1 + Math.random() * 2,
                 size: 3,
                 life: 30,
-                shape: 'star'
+                shape: 'spark',
+                shimmer: true,
+                rainbow: true
             }));
         }
-        return particles;
     }
 
     get points() { return 1; }
@@ -254,26 +274,45 @@ export class CrystalFood extends Food {
         ctx.restore();
     }
 
-    createEatEffect(x: number, y: number): Particle[] {
-        const particles: Particle[] = [];
-        for (let i = 0; i < 12; i++) {
-            particles.push(new Particle(x, y, '#64B5F6', {
-                speed: 2,
-                size: 8,
-                life: 45,
-                shape: 'spark'
+    createEatEffect(particles: Particle[]) {
+        // Crystal shards
+        for (let i = 0; i < 36; i++) {
+            const angle = (i / 36) * Math.PI * 2;
+            particles.push(new Particle(this.x * 50 + 25, this.y * 50 + 25, 'rgb(200, 220, 255)', {
+                speed: 2 + Math.random() * 3,
+                size: 10 + Math.random() * 5,
+                life: 45 + Math.random() * 20,
+                shape: 'crystal',
+                angle,
+                spin: true,
+                shimmer: true,
+                trail: Math.random() < 0.4
             }));
         }
-        // Add some sparkles
-        for (let i = 0; i < 15; i++) {
-            particles.push(new Particle(x, y, '#E3F2FD', {
-                speed: 1,
-                size: 3,
+
+        // Energy lines
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            particles.push(new Particle(this.x * 50 + 25, this.y * 50 + 25, 'rgb(150, 200, 255)', {
+                speed: 4,
+                size: 15,
                 life: 30,
-                shape: 'circle'
+                shape: 'beam',
+                angle,
+                shimmer: true
             }));
         }
-        return particles;
+
+        // Sparkles
+        for (let i = 0; i < 25; i++) {
+            particles.push(new Particle(this.x * 50 + 25, this.y * 50 + 25, 'rgb(220, 240, 255)', {
+                speed: 1 + Math.random() * 2,
+                size: 3,
+                life: 40,
+                shape: 'spark',
+                shimmer: true
+            }));
+        }
     }
 
     get points() { return 1; }
@@ -340,27 +379,48 @@ export class PulsarFood extends Food {
         ctx.restore();
     }
 
-    createEatEffect(x: number, y: number): Particle[] {
-        const particles: Particle[] = [];
-        for (let i = 0; i < 16; i++) {
-            particles.push(new Particle(x, y, '#E040FB', {
+    createEatEffect(particles: Particle[]) {
+        // Energy burst rings
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 12; j++) {
+                const angle = (j / 12) * Math.PI * 2;
+                particles.push(new Particle(this.x * 50 + 25, this.y * 50 + 25, 'rgb(180, 100, 255)', {
+                    speed: 2 + i,
+                    size: 8 + i * 2,
+                    life: 40,
+                    shape: 'circle',
+                    angle,
+                    pulse: true,
+                    shimmer: true
+                }));
+            }
+        }
+
+        // Energy beams
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            particles.push(new Particle(this.x * 50 + 25, this.y * 50 + 25, 'rgb(200, 100, 255)', {
                 speed: 3,
-                size: 6,
+                size: 20,
                 life: 35,
-                shape: 'spark'
+                shape: 'beam',
+                angle,
+                shimmer: true,
+                pulse: true
             }));
         }
 
-        // Add some purple sparkles
+        // Quantum particles
         for (let i = 0; i < 20; i++) {
-            particles.push(new Particle(x, y, '#E1BEE7', {
-                speed: 1.5,
-                size: 3,
-                life: 45,
-                shape: 'circle'
+            particles.push(new Particle(this.x * 50 + 25, this.y * 50 + 25, 'rgb(230, 180, 255)', {
+                speed: 2 + Math.random() * 2,
+                size: 5,
+                life: 50,
+                shape: 'circle',
+                quantum: true,
+                shimmer: true
             }));
         }
-        return particles;
     }
 
     get points() { return 1; }

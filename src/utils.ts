@@ -34,15 +34,20 @@ export function hexToRgb(hex: string): number[] {
 export function drawGrid(ctx: CanvasRenderingContext2D) {
     ctx.strokeStyle = "#333";
     ctx.lineWidth = 1;
-    for (let i = 0; i <= 10; i++) {
+
+    // Draw vertical lines
+    for (let i = 0; i <= 12; i++) {
         ctx.beginPath();
         ctx.moveTo(i * 50, 0);
-        ctx.lineTo(i * 50, 500);
+        ctx.lineTo(i * 50, 1050);
         ctx.stroke();
+    }
 
+    // Draw horizontal lines
+    for (let i = 0; i <= 21; i++) {
         ctx.beginPath();
         ctx.moveTo(0, i * 50);
-        ctx.lineTo(500, i * 50);
+        ctx.lineTo(600, i * 50);
         ctx.stroke();
     }
 }
