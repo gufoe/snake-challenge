@@ -1,76 +1,85 @@
 import { Direction } from './types';
 
+// Key mappings
+const KEY_MAPPINGS = {
+    'ArrowLeft': 'l',
+    'ArrowRight': 'r',
+    'ArrowUp': 'u',
+    'ArrowDown': 'd',
+    'a': 'l',
+    'd': 'r',
+    'w': 'u',
+    's': 'd'
+} as const;
+
+type KeyMap = typeof KEY_MAPPINGS;
+type ValidKey = keyof KeyMap;
+
 export class InputHandler {
-    private keys: { [key: string]: boolean } = {};
-    private currentDirection: Direction = 'l';
-    private directionQueue: Direction[] = ['l'];  // Queue of directions to process
-    private maxQueueSize = 3;  // Limit queue size to prevent too many buffered inputs
+    private keys: Set<string> = new Set();
+    private directionQueue: Direction[] = ['l'];
+    private readonly maxQueueSize = 3;
 
     constructor() {
-        window.addEventListener('keydown', (e) => {
-            this.keys[e.key] = true;
+        window.addEventListener('keydown', this.handleKeyDown.bind(this));
+        window.addEventListener('keyup', this.handleKeyUp.bind(this));
+    }
+
+    private handleKeyDown(e: KeyboardEvent): void {
+        if (this.isValidKey(e.key)) {
+            e.preventDefault();
+            this.keys.add(e.key);
             this.updateDirection();
+        }
+    }
 
-            // Prevent default behavior for arrow keys
-            if (e.key.startsWith('Arrow')) {
-                e.preventDefault();
-            }
-        });
+    private handleKeyUp(e: KeyboardEvent): void {
+        if (this.isValidKey(e.key)) {
+            this.keys.delete(e.key);
+        }
+    }
 
-        window.addEventListener('keyup', (e) => {
-            this.keys[e.key] = false;
-        });
+    private isValidKey(key: string): key is ValidKey {
+        return key in KEY_MAPPINGS;
     }
 
     private isOppositeDirection(dir1: Direction, dir2: Direction): boolean {
-        return (
-            (dir1 === 'l' && dir2 === 'r') ||
-            (dir1 === 'r' && dir2 === 'l') ||
-            (dir1 === 'u' && dir2 === 'd') ||
-            (dir1 === 'd' && dir2 === 'u')
-        );
+        const opposites = {
+            'l': 'r',
+            'r': 'l',
+            'u': 'd',
+            'd': 'u'
+        };
+        return opposites[dir1] === dir2;
     }
 
-    private updateDirection() {
-        let newDirection: Direction | null = null;
+    private updateDirection(): void {
+        const pressedKeys = Array.from(this.keys);
+        const lastPressedKey = pressedKeys[pressedKeys.length - 1];
 
-        // Get the latest pressed direction
-        if (this.keys["a"] || this.keys["ArrowLeft"]) newDirection = "l";
-        if (this.keys["d"] || this.keys["ArrowRight"]) newDirection = "r";
-        if (this.keys["w"] || this.keys["ArrowUp"]) newDirection = "u";
-        if (this.keys["s"] || this.keys["ArrowDown"]) newDirection = "d";
+        if (!lastPressedKey || !this.isValidKey(lastPressedKey)) {
+            return;
+        }
 
-        if (!newDirection) return;
-
-        // Get the last direction in the queue
+        const newDirection = KEY_MAPPINGS[lastPressedKey];
         const lastDirection = this.directionQueue[this.directionQueue.length - 1];
 
-        // Only add to queue if it's not the same as the last direction and not opposite to the last queued direction
         if (newDirection !== lastDirection && !this.isOppositeDirection(newDirection, lastDirection)) {
-            // Add to queue if within size limit
             if (this.directionQueue.length < this.maxQueueSize) {
                 this.directionQueue.push(newDirection);
             }
         }
     }
 
-    public getNextDirection(): Direction {
-        // If queue is empty, return current direction
-        if (this.directionQueue.length === 0) {
-            return this.currentDirection;
+    getNextDirection(): Direction {
+        if (this.directionQueue.length > 1) {
+            return this.directionQueue.shift()!;
         }
         return this.directionQueue[0];
     }
 
-    public setCurrentDirection(dir: Direction) {
-        this.currentDirection = dir;
-        // Remove the direction we just used from the queue
-        if (this.directionQueue.length > 0) {
-            this.directionQueue.shift();
-        }
-    }
-
-    public isKeyPressed(key: string): boolean {
-        return this.keys[key] || false;
+    clearQueue(): void {
+        const currentDirection = this.directionQueue[0];
+        this.directionQueue = [currentDirection];
     }
 }

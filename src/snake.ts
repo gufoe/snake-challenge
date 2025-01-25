@@ -36,19 +36,19 @@ export class SnakePart implements Position {
         let dx = this.targetX - this.x;
         let dy = this.targetY - this.y;
 
-        if (Math.abs(dx) > 6) {
-            if (dx > 0) dx -= 12;
-            else dx += 12;
+        if (Math.abs(dx) > GRID_WIDTH/2) {
+            if (dx > 0) dx -= GRID_WIDTH;
+            else dx += GRID_WIDTH;
             if (this.progress === 0) {
-                if (dx < 0) this.x = 12;
+                if (dx < 0) this.x = GRID_WIDTH;
                 else this.x = -1;
             }
         }
-        if (Math.abs(dy) > 10) {
-            if (dy > 0) dy -= 21;
-            else dy += 21;
+        if (Math.abs(dy) > GRID_HEIGHT/2) {
+            if (dy > 0) dy -= GRID_HEIGHT;
+            else dy += GRID_HEIGHT;
             if (this.progress === 0) {
-                if (dy < 0) this.y = 21;
+                if (dy < 0) this.y = GRID_HEIGHT;
                 else this.y = -1;
             }
         }
@@ -56,10 +56,10 @@ export class SnakePart implements Position {
         this.lerpX = this.x + dx * this.progress;
         this.lerpY = this.y + dy * this.progress;
 
-        if (this.lerpX < 0) this.lerpX += 12;
-        if (this.lerpX >= 12) this.lerpX -= 12;
-        if (this.lerpY < 0) this.lerpY += 21;
-        if (this.lerpY >= 21) this.lerpY -= 21;
+        if (this.lerpX < 0) this.lerpX += GRID_WIDTH;
+        if (this.lerpX >= GRID_WIDTH) this.lerpX -= GRID_WIDTH;
+        if (this.lerpY < 0) this.lerpY += GRID_HEIGHT;
+        if (this.lerpY >= GRID_HEIGHT) this.lerpY -= GRID_HEIGHT;
     }
 
     draw(ctx: CanvasRenderingContext2D, color: string, isHead: boolean = false, nextPart?: SnakePart) {
@@ -68,12 +68,12 @@ export class SnakePart implements Position {
         ctx.strokeStyle = shadeColor(color, -20);
         ctx.lineWidth = 2;
 
-        const x = this.lerpX * 50;
-        const y = this.lerpY * 50;
+        const x = this.lerpX * CELL_SIZE;
+        const y = this.lerpY * CELL_SIZE;
 
         // Draw the main body
         ctx.beginPath();
-        ctx.roundRect(x, y, 50, 50, 10);
+        ctx.roundRect(x, y, CELL_SIZE, CELL_SIZE, 10);
         ctx.fill();
         ctx.stroke();
 
@@ -95,13 +95,13 @@ export class SnakePart implements Position {
                 dy = dy > 0 ? dy - 20 : dy + 20;
             }
 
-            dx *= 50; // Convert to pixel coordinates
-            dy *= 50;
+            dx *= CELL_SIZE; // Convert to pixel coordinates
+            dy *= CELL_SIZE;
 
             // Create more vibrant gradient for connection
             const gradient = ctx.createLinearGradient(
-                x + 25, y + 25,
-                x + 25 + dx, y + 25 + dy
+                x + CELL_SIZE/2, y + CELL_SIZE/2,
+                x + CELL_SIZE/2 + dx, y + CELL_SIZE/2 + dy
             );
             gradient.addColorStop(0, color);
             gradient.addColorStop(0.2, shadeColor(color, 15));
@@ -113,7 +113,7 @@ export class SnakePart implements Position {
 
             const angle = Math.atan2(dy, dx);
             ctx.save();
-            ctx.translate(x + 25, y + 25);
+            ctx.translate(x + CELL_SIZE/2, y + CELL_SIZE/2);
             ctx.rotate(angle);
 
             // Sharp angular connection
@@ -135,7 +135,7 @@ export class SnakePart implements Position {
         // Create dynamic gradient for the main segment body
         const gradient = ctx.createLinearGradient(
             x, y,
-            x + 50, y + 50
+            x + CELL_SIZE, y + CELL_SIZE
         );
         gradient.addColorStop(0, shadeColor(color, 40));
         gradient.addColorStop(0.5, color);
@@ -144,9 +144,9 @@ export class SnakePart implements Position {
         // Draw hexagonal body
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        const centerX = x + 25;
-        const centerY = y + 25;
-        const radius = 25;
+        const centerX = x + CELL_SIZE/2;
+        const centerY = y + CELL_SIZE/2;
+        const radius = CELL_SIZE/2;
         for (let i = 0; i < 6; i++) {
             const angle = i * Math.PI / 3 - Math.PI / 6;
             const px = centerX + radius * Math.cos(angle);
@@ -165,7 +165,7 @@ export class SnakePart implements Position {
             // Add metallic shine effect
             const shineGradient = ctx.createLinearGradient(
                 x + 10, y + 10,
-                x + 40, y + 40
+                x + CELL_SIZE - 10, y + CELL_SIZE - 10
             );
             shineGradient.addColorStop(0, 'rgba(255,255,255,0.2)');
             shineGradient.addColorStop(0.5, 'rgba(255,255,255,0.1)');
@@ -211,9 +211,19 @@ function shadeColor(color: string, percent: number) {
     return "#" + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 + (G<255?G<1?0:G:255)*0x100 + (B<255?B<1?0:B:255)).toString(16).slice(1);
 }
 
+// Constants for game configuration
+const GRID_WIDTH = 12;
+const GRID_HEIGHT = 21;
+const CELL_SIZE = 50;
+const INITIAL_LIVES = 1;
+
+// Visual constants for ghost effect
+const GHOST_ALPHA = 0.6;
+const GHOST_COLOR = 'rgba(147, 112, 219, 1)';
+
 export class Snake implements Updateable, Drawable {
     score = 0;
-    lives = 1;
+    lives = INITIAL_LIVES;
     rects: SnakePart[] = [];
     dir: Direction = "l";
     moveTimer = 0;
@@ -283,8 +293,6 @@ export class Snake implements Updateable, Drawable {
             }
 
             this.move();
-            // Update the input handler with our current direction
-            this.inputHandler.setCurrentDirection(this.dir);
         }
 
         this.rects.forEach(part => {
@@ -322,8 +330,8 @@ export class Snake implements Updateable, Drawable {
                 ctx.fillStyle = trailGradient;
                 ctx.beginPath();
                 ctx.roundRect(
-                    r.lerpX * 50 + 4,
-                    r.lerpY * 50 + 4,
+                    r.lerpX * CELL_SIZE + 4,
+                    r.lerpY * CELL_SIZE + 4,
                     42,
                     42,
                     22
@@ -342,9 +350,9 @@ export class Snake implements Updateable, Drawable {
 
             // Apply special effect if any
             if (effect) {
-                const x = r.lerpX * 50;
-                const y = r.lerpY * 50;
-                effect(ctx, x, y, 50);
+                const x = r.lerpX * CELL_SIZE;
+                const y = r.lerpY * CELL_SIZE;
+                effect(ctx, x, y, CELL_SIZE);
             }
 
             // Draw power-up effects
@@ -373,9 +381,9 @@ export class Snake implements Updateable, Drawable {
 
     private drawHeadDetails(ctx: CanvasRenderingContext2D) {
         const head = this.rects[0];
-        const x = head.lerpX * 50;
-        const y = head.lerpY * 50;
-        const size = 50;
+        const x = head.lerpX * CELL_SIZE;
+        const y = head.lerpY * CELL_SIZE;
+        const size = CELL_SIZE;
         const eyeSize = 14;
         const eyeOffset = 17;
         const eyeY = y + eyeOffset;
@@ -693,48 +701,65 @@ export class Snake implements Updateable, Drawable {
 
     move() {
         const head = this.rects[0];
-        let newX = head.targetX;
-        let newY = head.targetY;
-
-        // Update position with wrap-around
-        if (this.dir == "l") newX = (newX - 1 + 12) % 12;
-        if (this.dir == "r") newX = (newX + 1) % 12;
-        if (this.dir == "u") newY = (newY - 1 + 21) % 21;
-        if (this.dir == "d") newY = (newY + 1) % 21;
+        const newPos = this.getNewPosition(head);
 
         // Check for collision with snake body
-        if (!this.isGhostMode && this.rects.length > 2 && this.rects.slice(1).some(r => {
-            return r.targetX === newX && r.targetY === newY;
-        })) {
-            if (this.lives > 1) {
-                this.lives--;
-                // Reset snake position but keep score and length
-                const oldLength = this.rects.length;
-                this.rects = [
-                    new SnakePart(randInt(12), randInt(21)),
-                    new SnakePart(this.rects[0].targetX + 1, this.rects[0].targetY)
-                ];
-                // Regrow to previous length
-                for (let i = 2; i < oldLength; i++) {
-                    this.grow({ x: this.rects[i-1].targetX, y: this.rects[i-1].targetY });
-                }
-                return;
-            }
-            this.isGameOver = true;
-            this.gameOverTime = this.gameOverDuration;
+        if (this.checkCollision(newPos)) {
+            this.handleCollision();
             return;
         }
 
-        // Store current positions before moving
-        const positions: {x: number, y: number}[] = this.rects.map(r => ({
-            x: r.targetX,
-            y: r.targetY
-        }));
+        this.updateSnakePositions(newPos);
+    }
+
+    private getNewPosition(head: SnakePart): Position {
+        const newPos = { x: head.targetX, y: head.targetY };
+
+        switch (this.dir) {
+            case "l": newPos.x = (newPos.x - 1 + GRID_WIDTH) % GRID_WIDTH; break;
+            case "r": newPos.x = (newPos.x + 1) % GRID_WIDTH; break;
+            case "u": newPos.y = (newPos.y - 1 + GRID_HEIGHT) % GRID_HEIGHT; break;
+            case "d": newPos.y = (newPos.y + 1) % GRID_HEIGHT; break;
+        }
+
+        return newPos;
+    }
+
+    private checkCollision(newPos: Position): boolean {
+        return !this.isGhostMode &&
+               this.rects.length > 2 &&
+               this.rects.slice(1).some(r => r.targetX === newPos.x && r.targetY === newPos.y);
+    }
+
+    private handleCollision() {
+        if (this.lives > 1) {
+            this.lives--;
+            this.respawnSnake();
+        } else {
+            this.isGameOver = true;
+            this.gameOverTime = this.gameOverDuration;
+        }
+    }
+
+    private respawnSnake() {
+        const oldLength = this.rects.length;
+        this.rects = [
+            new SnakePart(randInt(GRID_WIDTH), randInt(GRID_HEIGHT)),
+            new SnakePart(this.rects[0].targetX + 1, this.rects[0].targetY)
+        ];
+        // Regrow to previous length
+        for (let i = 2; i < oldLength; i++) {
+            this.grow({ x: this.rects[i-1].targetX, y: this.rects[i-1].targetY });
+        }
+    }
+
+    private updateSnakePositions(newPos: Position) {
+        const positions = this.rects.map(r => ({ x: r.targetX, y: r.targetY }));
 
         // Update all segments to their new positions
         this.rects.forEach((part, i) => {
             if (i === 0) {
-                part.setTarget(newX, newY);
+                part.setTarget(newPos.x, newPos.y);
             } else {
                 part.setTarget(positions[i - 1].x, positions[i - 1].y);
             }
@@ -794,26 +819,26 @@ export class Snake implements Updateable, Drawable {
     }
 
     private drawGhostEffect(ctx: CanvasRenderingContext2D, part: SnakePart, index: number) {
-        const x = part.lerpX * 50;
-        const y = part.lerpY * 50;
-        const size = 50;
+        const x = part.lerpX * CELL_SIZE;
+        const y = part.lerpY * CELL_SIZE;
+        const size = CELL_SIZE;
 
         ctx.save();
 
         // Make the snake semi-transparent when in ghost mode
-        ctx.globalAlpha = 0.6;
+        ctx.globalAlpha = GHOST_ALPHA;
 
         // Add ghost aura with stronger opacity
-        const pulseAlpha = 0.6 + Math.sin(this.effectRotation + index * 0.2) * 0.2;
+        const pulseAlpha = GHOST_ALPHA + Math.sin(this.effectRotation + index * 0.2) * 0.2;
 
         // Create larger ghost aura gradient
         const gradient = ctx.createRadialGradient(
             x + size/2, y + size/2, size/3,
             x + size/2, y + size/2, size
         );
-        gradient.addColorStop(0, `rgba(147, 112, 219, ${pulseAlpha})`);
-        gradient.addColorStop(0.5, `rgba(147, 112, 219, ${pulseAlpha * 0.5})`);
-        gradient.addColorStop(1, 'rgba(147, 112, 219, 0)');
+        gradient.addColorStop(0, GHOST_COLOR.replace('1)', `${pulseAlpha})`));
+        gradient.addColorStop(0.5, GHOST_COLOR.replace('1)', `${pulseAlpha * 0.5})`));
+        gradient.addColorStop(1, GHOST_COLOR.replace('1)', '0)'));
 
         ctx.fillStyle = gradient;
         ctx.beginPath();
@@ -821,7 +846,7 @@ export class Snake implements Updateable, Drawable {
         ctx.fill();
 
         // Add ethereal particles with stronger glow
-        ctx.shadowColor = 'rgba(147, 112, 219, 0.8)';
+        ctx.shadowColor = GHOST_COLOR.replace('1)', '0.8)');
         ctx.shadowBlur = 10;
 
         for (let i = 0; i < 5; i++) {
@@ -833,12 +858,12 @@ export class Snake implements Updateable, Drawable {
             // Draw larger ghost particles
             ctx.beginPath();
             ctx.arc(px, py, 3, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(147, 112, 219, 0.8)';
+            ctx.fillStyle = GHOST_COLOR.replace('1)', '0.8)');
             ctx.fill();
         }
 
         // Add ghostly trails
-        ctx.strokeStyle = 'rgba(147, 112, 219, 0.4)';
+        ctx.strokeStyle = GHOST_COLOR.replace('1)', '0.4)');
         ctx.lineWidth = 2;
         for (let i = 0; i < 3; i++) {
             const trailAngle = this.effectRotation + i * (Math.PI * 2 / 3);
@@ -857,9 +882,9 @@ export class Snake implements Updateable, Drawable {
     }
 
     private drawSlowMotionEffect(ctx: CanvasRenderingContext2D, part: SnakePart, index: number) {
-        const x = part.lerpX * 50;
-        const y = part.lerpY * 50;
-        const size = 50;
+        const x = part.lerpX * CELL_SIZE;
+        const y = part.lerpY * CELL_SIZE;
+        const size = CELL_SIZE;
 
         ctx.save();
         ctx.globalAlpha = 0.4 + Math.sin(this.effectRotation + index * 0.1) * 0.1;
