@@ -18,7 +18,7 @@ type ValidKey = keyof KeyMap;
 export class InputHandler {
     private keys: Set<string> = new Set();
     private directionQueue: Direction[] = ['l'];
-    private readonly maxQueueSize = 3;
+    private readonly maxQueueSize = 2;
 
     constructor() {
         window.addEventListener('keydown', this.handleKeyDown.bind(this));
@@ -65,9 +65,7 @@ export class InputHandler {
         const lastDirection = this.directionQueue[this.directionQueue.length - 1];
 
         if (newDirection !== lastDirection && !this.isOppositeDirection(newDirection, lastDirection)) {
-            if (this.directionQueue.length < this.maxQueueSize) {
-                this.directionQueue.push(newDirection);
-            }
+            this.directionQueue = [lastDirection, newDirection];
         }
     }
 
