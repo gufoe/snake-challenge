@@ -1,4 +1,4 @@
-import { Food, foodTypes, StarFood } from './food';
+import { Food, foodTypes } from './food';
 import { Snake } from './snake';
 import { Particle } from './particle';
 import { PopupText, POPUP_MESSAGES } from './popup';

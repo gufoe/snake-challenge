@@ -1,208 +1,9 @@
-import { Food, StarFood, RainbowFood, CrystalFood, PulsarFood } from './food';
-import { hexToRgb, randInt } from './utils';
-import { PowerUp, ExtraLifePowerUp, TimeSlowPowerUp, GhostPowerUp } from './powerup';
-import { Particle } from './particle';
-import { Direction, Position, Drawable, Updateable } from './types';
+import { CrystalFood, Food, PulsarFood, RainbowFood, StarFood } from './food';
 import { InputHandler } from './input-handler';
+import { PowerUp } from './powerup';
+import { Direction, Drawable, Position, Updateable } from './types';
+import { hexToRgb, randInt } from './utils';
 
-// Game state variables
-let canvas: HTMLCanvasElement;
-let ctx: CanvasRenderingContext2D;
-let lastTime: number;
-let snake: Snake;
-let currentFood: Food | null = null;
-let currentPowerUp: PowerUp | null = null;
-let powerUpSpawnTimer = 0;
-const powerUpSpawnInterval = 15000; // Spawn power-up every 15 seconds
-const powerUpTypes = [ExtraLifePowerUp, TimeSlowPowerUp, GhostPowerUp];
-let particles: Particle[] = []; // Initialize particles as an empty array
-
-// Camera shake effect variables
-let shakeTime = 0;
-let shakeIntensity = 0;
-const shakeDuration = 200; // Duration of shake in milliseconds
-const baseShakeAmount = 40; // Base intensity of the shake
-
-// Initialize the game
-function initGame() {
-    // Get canvas and context
-    canvas = document.querySelector('canvas')!;
-    ctx = canvas.getContext('2d')!;
-
-    // Initialize game state
-    lastTime = performance.now();
-    snake = new Snake(6, 10);
-    particles = []; // Reset particles array
-
-    // Handle game restart on space
-    window.addEventListener('keydown', (e) => {
-        if (e.code === 'Space' && snake.isGameOver) {
-            snake.reset(6, 10);
-            requestAnimationFrame(gameLoop);
-        }
-
-        // Prevent default behavior for arrow keys to avoid scrolling
-        if (e.key.startsWith('Arrow')) {
-            e.preventDefault();
-        }
-    });
-
-    // Start game loop
-    requestAnimationFrame(gameLoop);
-}
-
-function gameLoop() {
-    const now = performance.now();
-    const dt = now - lastTime;
-    lastTime = now;
-
-    // Update shake effect
-    if (shakeTime > 0) {
-        shakeTime = Math.max(0, shakeTime - dt);
-    }
-
-    // Clear canvas
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Calculate shake offset with more intense values
-    let shakeOffsetX = 0;
-    let shakeOffsetY = 0;
-    if (shakeTime > 0) {
-        const shakeProgress = shakeTime / shakeDuration;
-        const currentIntensity = shakeIntensity * shakeProgress;
-        // Use multiple frequencies for more chaotic shake
-        shakeOffsetX = (
-            Math.sin(Date.now() / 20) * 1.5 + // Fast shake
-            Math.sin(Date.now() / 10) * 0.5   // Very fast shake
-        ) * currentIntensity;
-        shakeOffsetY = (
-            Math.cos(Date.now() / 25) * 1.5 + // Fast shake
-            Math.cos(Date.now() / 12) * 0.5   // Very fast shake
-        ) * currentIntensity;
-    }
-
-    // Center the game with shake effect
-    ctx.translate(
-        canvas.width / 2 - 300 + shakeOffsetX,
-        canvas.height / 2 - 525 + shakeOffsetY
-    );
-
-    // Draw background grid
-    ctx.strokeStyle = '#2a2a2a';
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= 600; x += 50) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, 1050);
-        ctx.stroke();
-    }
-    for (let y = 0; y <= 1050; y += 50) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(600, y);
-        ctx.stroke();
-    }
-
-    // Update snake
-    snake.update(dt);
-
-    // Spawn food if needed
-    if (!currentFood) {
-        const foodX = randInt(12);
-        const foodY = randInt(21);
-        const foodType = Math.random();
-        if (foodType < 0.6) {
-            currentFood = new StarFood(foodX, foodY);
-        } else if (foodType < 0.8) {
-            currentFood = new RainbowFood(foodX, foodY);
-        } else if (foodType < 0.9) {
-            currentFood = new CrystalFood(foodX, foodY);
-        } else {
-            currentFood = new PulsarFood(foodX, foodY);
-        }
-    }
-
-    // Update power-up spawn timer
-    powerUpSpawnTimer -= dt;
-    if (powerUpSpawnTimer <= 0 && !currentPowerUp) {
-        powerUpSpawnTimer = powerUpSpawnInterval;
-        const powerUpX = randInt(12);
-        const powerUpY = randInt(21);
-        const powerUpType = powerUpTypes[randInt(powerUpTypes.length)];
-        currentPowerUp = new powerUpType(powerUpX, powerUpY);
-    }
-
-    // Check for food collision
-    if (currentFood && snake.checkFoodCollision(currentFood)) {
-        currentFood.createEatEffect(particles);
-        currentFood = null;
-
-        // Trigger shake effect based on score
-        shakeTime = shakeDuration;
-        // Calculate shake intensity based on score
-        shakeIntensity = snake.score <= 20
-            ? baseShakeAmount * (snake.score / 20) // Linear increase up to score 20
-            : baseShakeAmount + (baseShakeAmount * ((snake.score - 20) / 40) * 0.5); // Half intensity increase after 20
-
-        // Vibrate if supported (short, crisp vibration)
-        if ('vibrate' in navigator) {
-            navigator.vibrate([20, 15, 10]); // Three quick pulses
-        }
-    }
-
-    // Check for power-up collision
-    if (currentPowerUp && snake.checkPowerUpCollision(currentPowerUp)) {
-        currentPowerUp.applyEffect(snake);
-        currentPowerUp.createCollectEffect(snake.rects[0].targetX, snake.rects[0].targetY);
-        currentPowerUp = null;
-        // Vibrate if supported (longer vibration for power-up)
-        if ('vibrate' in navigator) {
-            navigator.vibrate([40, 30, 20]); // Three stronger pulses
-        }
-    }
-
-    // Draw food
-    if (currentFood) {
-        currentFood.draw(ctx);
-    }
-
-    // Draw power-up
-    if (currentPowerUp) {
-        currentPowerUp.draw(ctx);
-        currentPowerUp.update();
-        if (currentPowerUp.isExpired()) {
-            currentPowerUp = null;
-        }
-    }
-
-    // Update and draw particles
-    particles = particles.filter(p => p.life > 0);
-    particles.forEach(p => {
-        p.update();
-        p.draw(ctx);
-    });
-
-    // Draw snake
-    snake.render(ctx);
-
-    // Draw score
-    snake.drawScore(ctx);
-
-    // Draw lives
-    ctx.fillText(`Lives: ${snake.lives}`, 10, 60);
-
-    // Restore the canvas transform
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-    // Request next frame if game is not over
-    if (!snake.isGameOver) {
-        requestAnimationFrame(gameLoop);
-    } else {
-        // Draw game over screen
-        snake.drawGameOver(ctx, 1);
-    }
-}
 
 export class SnakePart implements Position {
     public lerpX: number;
@@ -262,10 +63,19 @@ export class SnakePart implements Position {
     }
 
     draw(ctx: CanvasRenderingContext2D, color: string, isHead: boolean = false, nextPart?: SnakePart) {
+        // Draw the snake part
+        ctx.fillStyle = color;
+        ctx.strokeStyle = shadeColor(color, -20);
+        ctx.lineWidth = 2;
+
         const x = this.lerpX * 50;
         const y = this.lerpY * 50;
-        const size = 50;
-        const padding = 4;
+
+        // Draw the main body
+        ctx.beginPath();
+        ctx.roundRect(x, y, 50, 50, 10);
+        ctx.fill();
+        ctx.stroke();
 
         // Enhanced glow effect
         ctx.shadowColor = color;
@@ -273,8 +83,6 @@ export class SnakePart implements Position {
 
         // Draw connection to next segment if it exists
         if (nextPart) {
-            const nx = nextPart.lerpX * 50;
-            const ny = nextPart.lerpY * 50;
 
             let dx = nextPart.lerpX - this.lerpX;
             let dy = nextPart.lerpY - this.lerpY;
@@ -292,8 +100,8 @@ export class SnakePart implements Position {
 
             // Create more vibrant gradient for connection
             const gradient = ctx.createLinearGradient(
-                x + size/2, y + size/2,
-                x + size/2 + dx, y + size/2 + dy
+                x + 25, y + 25,
+                x + 25 + dx, y + 25 + dy
             );
             gradient.addColorStop(0, color);
             gradient.addColorStop(0.2, shadeColor(color, 15));
@@ -305,7 +113,7 @@ export class SnakePart implements Position {
 
             const angle = Math.atan2(dy, dx);
             ctx.save();
-            ctx.translate(x + size/2, y + size/2);
+            ctx.translate(x + 25, y + 25);
             ctx.rotate(angle);
 
             // Sharp angular connection
@@ -327,7 +135,7 @@ export class SnakePart implements Position {
         // Create dynamic gradient for the main segment body
         const gradient = ctx.createLinearGradient(
             x, y,
-            x + size, y + size
+            x + 50, y + 50
         );
         gradient.addColorStop(0, shadeColor(color, 40));
         gradient.addColorStop(0.5, color);
@@ -336,9 +144,9 @@ export class SnakePart implements Position {
         // Draw hexagonal body
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        const centerX = x + size/2;
-        const centerY = y + size/2;
-        const radius = size/2 - padding;
+        const centerX = x + 25;
+        const centerY = y + 25;
+        const radius = 25;
         for (let i = 0; i < 6; i++) {
             const angle = i * Math.PI / 3 - Math.PI / 6;
             const px = centerX + radius * Math.cos(angle);
@@ -356,8 +164,8 @@ export class SnakePart implements Position {
         if (isHead) {
             // Add metallic shine effect
             const shineGradient = ctx.createLinearGradient(
-                x + padding, y + padding,
-                x + size - padding, y + size - padding
+                x + 10, y + 10,
+                x + 40, y + 40
             );
             shineGradient.addColorStop(0, 'rgba(255,255,255,0.2)');
             shineGradient.addColorStop(0.5, 'rgba(255,255,255,0.1)');
@@ -421,7 +229,6 @@ export class Snake implements Updateable, Drawable {
     isSlowMotion = false;
     slowMotionEndTime = 0;
     private inputHandler: InputHandler;
-    private lastMoveDirection: Direction = "l";  // Track the actual last move direction
 
     // Add transition properties
     transitionTime = 0;

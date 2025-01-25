@@ -1,13 +1,9 @@
-import { Snake } from './snake';
-import { Food, foodTypes, StarFood } from './food';
-import { Particle } from './particle';
-import { Rect, drawRect, randInt } from './utils';
 import "./style.css";
 import { GameState } from './game-state';
 import { Renderer } from './renderer';
-import { PopupText } from './popup';
-import { POPUP_MESSAGES } from './popup';
 import { AmbientParticle } from './ambient-particle';
+
+// Remove unused imports
 
 // Set up the canvas element in the HTML
 document.querySelector<HTMLDivElement>("#app")!.innerHTML = `

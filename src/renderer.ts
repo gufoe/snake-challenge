@@ -1,11 +1,8 @@
 import { GameState } from './game-state';
-import { ScreenShake } from './screen-shake';
 import { AmbientParticle } from './ambient-particle';
 
 export class Renderer {
-    private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
-    private screenShake: ScreenShake;
     private ambientParticles: AmbientParticle[];
     private width: number;
     private height: number;
@@ -14,9 +11,7 @@ export class Renderer {
     private readonly shakeDuration: number = 200;
 
     constructor(canvas: HTMLCanvasElement) {
-        this.canvas = canvas;
         this.ctx = canvas.getContext('2d')!;
-        this.screenShake = new ScreenShake();
         this.width = canvas.width;
         this.height = canvas.height;
 
