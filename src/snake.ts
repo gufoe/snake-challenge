@@ -2,6 +2,8 @@ import { Food, StarFood, RainbowFood, CrystalFood, PulsarFood } from './food';
 import { hexToRgb, randInt } from './utils';
 import { PowerUp, ExtraLifePowerUp, TimeSlowPowerUp, GhostPowerUp } from './powerup';
 import { Particle } from './particle';
+import { Direction, Position, Drawable, Updateable } from './types';
+import { InputHandler } from './input-handler';
 
 // Game state variables
 let canvas: HTMLCanvasElement;
@@ -32,14 +34,8 @@ function initGame() {
     snake = new Snake(6, 10);
     particles = []; // Reset particles array
 
-    // Set up keyboard input
-    const keys: { [key: string]: boolean } = {};
-
+    // Handle game restart on space
     window.addEventListener('keydown', (e) => {
-        keys[e.key] = true;
-        snake.processInput(keys);
-
-        // Handle game restart
         if (e.code === 'Space' && snake.isGameOver) {
             snake.reset(6, 10);
             requestAnimationFrame(gameLoop);
@@ -49,10 +45,6 @@ function initGame() {
         if (e.key.startsWith('Arrow')) {
             e.preventDefault();
         }
-    });
-
-    window.addEventListener('keyup', (e) => {
-        keys[e.key] = false;
     });
 
     // Start game loop
@@ -192,13 +184,10 @@ function gameLoop() {
     });
 
     // Draw snake
-    snake.draw(ctx, currentFood || snake.lastFoodType || new StarFood(0, 0));
+    snake.render(ctx);
 
     // Draw score
-    ctx.fillStyle = '#fff';
-    ctx.font = '24px Arial';
-    ctx.textAlign = 'left';
-    ctx.fillText(`Score: ${snake.score}`, 10, 30);
+    snake.drawScore(ctx);
 
     // Draw lives
     ctx.fillText(`Lives: ${snake.lives}`, 10, 60);
@@ -211,19 +200,11 @@ function gameLoop() {
         requestAnimationFrame(gameLoop);
     } else {
         // Draw game over screen
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#fff';
-        ctx.font = '48px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('Game Over!', canvas.width / 2, canvas.height / 2 - 50);
-        ctx.font = '24px Arial';
-        ctx.fillText(`Final Score: ${snake.score}`, canvas.width / 2, canvas.height / 2 + 50);
-        ctx.fillText('Press Space to Restart', canvas.width / 2, canvas.height / 2 + 100);
+        snake.drawGameOver(ctx, 1);
     }
 }
 
-export class SnakePart {
+export class SnakePart implements Position {
     // Current interpolated position (smooth movement)
     public lerpX: number;
     public lerpY: number;
@@ -233,27 +214,74 @@ export class SnakePart {
     // Progress of movement from current to target position (0 to 1)
     public progress: number = 1;
 
-    public constructor(public x: number, public y: number) {
+    constructor(public x: number, public y: number) {
         this.lerpX = x;
         this.lerpY = y;
         this.targetX = x;
         this.targetY = y;
     }
 
-    /**
-     * Draws the snake segment and its connection to the next segment
-     * @param c - Color of the segment
-     * @param isHead - Whether this segment is the snake's head
-     * @param nextPart - The next segment to connect to (if any)
-     */
-    draw(ctx: CanvasRenderingContext2D, c: string, isHead: boolean = false, nextPart?: SnakePart) {
+    setTarget(x: number, y: number) {
+        // Current target becomes new starting position
+        this.x = this.targetX;
+        this.y = this.targetY;
+        // Set new target position
+        this.targetX = x;
+        this.targetY = y;
+        // Reset progress for new movement
+        this.progress = 0;
+    }
+
+    updateLerp(deltaTime: number) {
+        // Calculate movement speed based on time elapsed
+        const speed = deltaTime / 150; // 150ms to move one cell
+
+        // Update progress towards target position
+        this.progress = Math.min(1, this.progress + speed);
+
+        // Calculate the shortest path to target (handling wrap-around)
+        let dx = this.targetX - this.x;
+        let dy = this.targetY - this.y;
+
+        // Handle wrap-around movement across screen edges
+        if (Math.abs(dx) > 6) {
+            if (dx > 0) dx -= 12;
+            else dx += 12;
+            // Adjust the current position for smoother wrap-around
+            if (this.progress === 0) {
+                if (dx < 0) this.x = 12;
+                else this.x = -1;
+            }
+        }
+        if (Math.abs(dy) > 10) {
+            if (dy > 0) dy -= 21;
+            else dy += 21;
+            // Adjust the current position for smoother wrap-around
+            if (this.progress === 0) {
+                if (dy < 0) this.y = 21;
+                else this.y = -1;
+            }
+        }
+
+        // Update interpolated position
+        this.lerpX = this.x + dx * this.progress;
+        this.lerpY = this.y + dy * this.progress;
+
+        // Keep interpolated positions within bounds
+        if (this.lerpX < 0) this.lerpX += 12;
+        if (this.lerpX >= 12) this.lerpX -= 12;
+        if (this.lerpY < 0) this.lerpY += 21;
+        if (this.lerpY >= 21) this.lerpY -= 21;
+    }
+
+    draw(ctx: CanvasRenderingContext2D, color: string, isHead: boolean = false, nextPart?: SnakePart) {
         const x = this.lerpX * 50;
         const y = this.lerpY * 50;
         const size = 50;
         const padding = 4;
 
         // Enhanced glow effect
-        ctx.shadowColor = c;
+        ctx.shadowColor = color;
         ctx.shadowBlur = 15;
 
         // Draw connection to next segment if it exists
@@ -280,10 +308,10 @@ export class SnakePart {
                 x + size/2, y + size/2,
                 x + size/2 + dx, y + size/2 + dy
             );
-            gradient.addColorStop(0, c);
-            gradient.addColorStop(0.2, shadeColor(c, 15));
-            gradient.addColorStop(0.8, shadeColor(c, 15));
-            gradient.addColorStop(1, c);
+            gradient.addColorStop(0, color);
+            gradient.addColorStop(0.2, shadeColor(color, 15));
+            gradient.addColorStop(0.8, shadeColor(color, 15));
+            gradient.addColorStop(1, color);
 
             ctx.fillStyle = gradient;
             ctx.beginPath();
@@ -314,9 +342,9 @@ export class SnakePart {
             x, y,
             x + size, y + size
         );
-        gradient.addColorStop(0, shadeColor(c, 40));
-        gradient.addColorStop(0.5, c);
-        gradient.addColorStop(1, shadeColor(c, -20));
+        gradient.addColorStop(0, shadeColor(color, 40));
+        gradient.addColorStop(0.5, color);
+        gradient.addColorStop(1, shadeColor(color, -20));
 
         // Draw hexagonal body
         ctx.fillStyle = gradient;
@@ -377,66 +405,6 @@ export class SnakePart {
         // Reset shadow
         ctx.shadowBlur = 0;
     }
-
-    /**
-     * Updates the interpolated position based on progress towards target
-     * @param deltaTime - Time elapsed since last update (for smooth animation)
-     */
-    updateLerp(deltaTime: number) {
-        // Calculate movement speed based on time elapsed
-        const speed = deltaTime / 150; // 150ms to move one cell
-
-        // Update progress towards target position
-        this.progress = Math.min(1, this.progress + speed);
-
-        // Calculate the shortest path to target (handling wrap-around)
-        let dx = this.targetX - this.x;
-        let dy = this.targetY - this.y;
-
-        // Handle wrap-around movement across screen edges
-        if (Math.abs(dx) > 6) {
-            if (dx > 0) dx -= 12;
-            else dx += 12;
-            // Adjust the current position for smoother wrap-around
-            if (this.progress === 0) {
-                if (dx < 0) this.x = 12;
-                else this.x = -1;
-            }
-        }
-        if (Math.abs(dy) > 10) {
-            if (dy > 0) dy -= 21;
-            else dy += 21;
-            // Adjust the current position for smoother wrap-around
-            if (this.progress === 0) {
-                if (dy < 0) this.y = 21;
-                else this.y = -1;
-            }
-        }
-
-        // Update interpolated position
-        this.lerpX = this.x + dx * this.progress;
-        this.lerpY = this.y + dy * this.progress;
-
-        // Keep interpolated positions within bounds
-        if (this.lerpX < 0) this.lerpX += 12;
-        if (this.lerpX >= 12) this.lerpX -= 12;
-        if (this.lerpY < 0) this.lerpY += 21;
-        if (this.lerpY >= 21) this.lerpY -= 21;
-    }
-
-    /**
-     * Sets a new target position for the segment to move towards
-     */
-    setTarget(x: number, y: number) {
-        // Current target becomes new starting position
-        this.x = this.targetX;
-        this.y = this.targetY;
-        // Set new target position
-        this.targetX = x;
-        this.targetY = y;
-        // Reset progress for new movement
-        this.progress = 0;
-    }
 }
 
 function shadeColor(color: string, percent: number) {
@@ -448,12 +416,11 @@ function shadeColor(color: string, percent: number) {
     return "#" + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 + (G<255?G<1?0:G:255)*0x100 + (B<255?B<1?0:B:255)).toString(16).slice(1);
 }
 
-export class Snake {
+export class Snake implements Updateable, Drawable {
     score = 0;
     lives = 1;
     rects: SnakePart[] = [];
-    dir: "l" | "u" | "d" | "r" = "l";
-    nextDir: "l" | "u" | "d" | "r" = "l";
+    dir: Direction = "l";
     moveTimer = 0;
     moveInterval = 150;
     baseInterval = 150;  // Store the initial interval
@@ -463,6 +430,8 @@ export class Snake {
     gameOverTime = 0;
     gameOverDuration = 1000;
     isGhostMode = false;
+    private inputHandler: InputHandler;
+    private lastMoveDirection: Direction = "l";  // Track the actual last move direction
 
     // Add transition properties
     transitionTime = 0;
@@ -475,6 +444,185 @@ export class Snake {
             new SnakePart(x, y),
             new SnakePart(x + 1, y)
         ];
+        this.inputHandler = new InputHandler();
+    }
+
+    private isOppositeDirection(dir1: Direction, dir2: Direction): boolean {
+        return (
+            (dir1 === 'l' && dir2 === 'r') ||
+            (dir1 === 'r' && dir2 === 'l') ||
+            (dir1 === 'u' && dir2 === 'd') ||
+            (dir1 === 'd' && dir2 === 'u')
+        );
+    }
+
+    update(deltaTime: number) {
+        if (this.isGameOver) {
+            this.gameOverTime = Math.max(0, this.gameOverTime - deltaTime);
+            return;
+        }
+
+        // Only update rotation for effects
+        this.effectRotation += 0.1;
+
+        this.moveTimer += deltaTime;
+        if (this.moveTimer >= this.moveInterval) {
+            this.moveTimer = 0;
+
+            // Get and apply next direction from the queue
+            const nextDir = this.inputHandler.getNextDirection();
+            if (!this.isOppositeDirection(nextDir, this.dir)) {
+                this.dir = nextDir;
+            }
+
+            this.move();
+            // Update the input handler with our current direction
+            this.inputHandler.setCurrentDirection(this.dir);
+        }
+
+        this.rects.forEach(part => {
+            part.updateLerp(deltaTime);
+        });
+    }
+
+    draw(ctx: CanvasRenderingContext2D): void {
+        this.render(ctx);
+    }
+
+    render(ctx: CanvasRenderingContext2D): void {
+        // Draw trail effect with gradient
+        const trailGradient = ctx.createLinearGradient(0, 0, 500, 500);
+        if (this.lastFoodType) {
+            const baseColor = this.getBaseColorForFood(this.lastFoodType, 0);
+            if (this.lastFoodType instanceof RainbowFood) {
+                const hue = (this.effectRotation * 50) % 360;
+                trailGradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 0.1)`);
+                trailGradient.addColorStop(1, `hsla(${hue}, 100%, 50%, 0.05)`);
+            } else {
+                const rgb = hexToRgb(baseColor);
+                trailGradient.addColorStop(0, `rgba(${rgb.join(',')}, 0.1)`);
+                trailGradient.addColorStop(1, `rgba(${rgb.join(',')}, 0.05)`);
+            }
+        } else {
+            trailGradient.addColorStop(0, 'rgba(76, 175, 80, 0.1)');
+            trailGradient.addColorStop(1, 'rgba(76, 175, 80, 0.05)');
+        }
+
+        // Draw trail effect with gradient
+        this.rects.forEach((r, i) => {
+            const alpha = 0.15 - (i * 0.01);
+            if (alpha > 0) {
+                ctx.fillStyle = trailGradient;
+                ctx.beginPath();
+                ctx.roundRect(
+                    r.lerpX * 50 + 4,
+                    r.lerpY * 50 + 4,
+                    42,
+                    42,
+                    22
+                );
+                ctx.fill();
+            }
+        });
+
+        // Draw snake segments
+        this.rects.forEach((r, i) => {
+            const nextPart = this.rects[i + 1];
+            const { color, effect } = this.getSegmentColor(i);
+
+            // Draw base segment
+            r.draw(ctx, color, i === 0, nextPart);
+
+            // Apply special effect if any
+            if (effect) {
+                const x = r.lerpX * 50;
+                const y = r.lerpY * 50;
+                effect(ctx, x, y, 50);
+            }
+        });
+
+        // Draw head details last (eyes, etc.)
+        if (this.rects.length > 0) {
+            this.drawHeadDetails(ctx);
+        }
+
+        // Draw score
+        this.drawScore(ctx);
+
+        // Draw game over screen
+        if (this.isGameOver) {
+            const progress = 1 - (this.gameOverTime / this.gameOverDuration);
+            this.drawGameOver(ctx, progress);
+        }
+    }
+
+    private drawHeadDetails(ctx: CanvasRenderingContext2D) {
+        const head = this.rects[0];
+        const x = head.lerpX * 50;
+        const y = head.lerpY * 50;
+        const size = 50;
+        const eyeSize = 14;
+        const eyeOffset = 17;
+        const eyeY = y + eyeOffset;
+
+        // Add eyes with enhanced glow
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = "#fff";
+
+        // Draw diamond-shaped eyes
+        const drawDiamondEye = (centerX: number, centerY: number) => {
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY - eyeSize/2);
+            ctx.lineTo(centerX + eyeSize/2, centerY);
+            ctx.lineTo(centerX, centerY + eyeSize/2);
+            ctx.lineTo(centerX - eyeSize/2, centerY);
+            ctx.closePath();
+            ctx.fill();
+        };
+
+        drawDiamondEye(x + eyeOffset, eyeY);
+        drawDiamondEye(x + size - eyeOffset, eyeY);
+
+        // Add pupils that follow movement direction
+        let pupilX = 0;
+        let pupilY = 0;
+
+        if (this.dir === 'l') pupilX = -3;
+        if (this.dir === 'r') pupilX = 3;
+        if (this.dir === 'u') pupilY = -3;
+        if (this.dir === 'd') pupilY = 3;
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#000';
+
+        // Draw larger, rounder pupils
+        const drawPupil = (centerX: number, centerY: number) => {
+            ctx.beginPath();
+            const pupilSize = eyeSize/2;
+            ctx.arc(centerX + pupilX, centerY + pupilY, pupilSize/2, 0, Math.PI * 2);
+            ctx.fill();
+        };
+
+        drawPupil(x + eyeOffset, eyeY);
+        drawPupil(x + size - eyeOffset, eyeY);
+
+        // Add cute sparkles in the eyes
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        const drawSparkle = (centerX: number, centerY: number) => {
+            // Main shine
+            ctx.beginPath();
+            ctx.arc(centerX - 2 + pupilX/2, centerY - 2 + pupilY/2, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Small secondary shine
+            ctx.beginPath();
+            ctx.arc(centerX + 2 + pupilX/2, centerY + 2 + pupilY/2, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+        };
+
+        drawSparkle(x + eyeOffset, eyeY);
+        drawSparkle(x + size - eyeOffset, eyeY);
     }
 
     getSegmentColor(index: number): { color: string, effect?: (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => void } {
@@ -574,148 +722,7 @@ export class Snake {
         return undefined;
     }
 
-    draw(ctx: CanvasRenderingContext2D, currentFood: Food) {
-        // Only update rotation for effects
-        this.effectRotation += 0.1;
-
-        // Draw trail effect with gradient
-        const trailGradient = ctx.createLinearGradient(0, 0, 500, 500);
-        if (this.lastFoodType) {
-            const baseColor = this.getBaseColorForFood(this.lastFoodType, 0);
-            if (this.lastFoodType instanceof RainbowFood) {
-                const hue = (this.effectRotation * 50) % 360;
-                trailGradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 0.1)`);
-                trailGradient.addColorStop(1, `hsla(${hue}, 100%, 50%, 0.05)`);
-            } else {
-                const rgb = hexToRgb(baseColor);
-                trailGradient.addColorStop(0, `rgba(${rgb.join(',')}, 0.1)`);
-                trailGradient.addColorStop(1, `rgba(${rgb.join(',')}, 0.05)`);
-            }
-        } else {
-            trailGradient.addColorStop(0, 'rgba(76, 175, 80, 0.1)');
-            trailGradient.addColorStop(1, 'rgba(76, 175, 80, 0.05)');
-        }
-
-        // Draw trail effect with gradient
-        this.rects.forEach((r, i) => {
-            const alpha = 0.15 - (i * 0.01);
-            if (alpha > 0) {
-                ctx.fillStyle = trailGradient;
-                ctx.beginPath();
-                ctx.roundRect(
-                    r.lerpX * 50 + 4,
-                    r.lerpY * 50 + 4,
-                    42,
-                    42,
-                    22
-                );
-                ctx.fill();
-            }
-        });
-
-        // Draw snake segments
-        this.rects.forEach((r, i) => {
-            const nextPart = this.rects[i + 1];
-            const { color, effect } = this.getSegmentColor(i);
-
-            // Draw base segment
-            r.draw(ctx, color, i === 0, nextPart);
-
-            // Apply special effect if any
-            if (effect) {
-                const x = r.lerpX * 50;
-                const y = r.lerpY * 50;
-                effect(ctx, x, y, 50);
-            }
-        });
-
-        // Draw head details last (eyes, etc.)
-        if (this.rects.length > 0) {
-            this.drawHeadDetails(ctx, currentFood);
-        }
-
-        // Draw in-game score
-        if (!this.isGameOver) {
-            this.drawScore(ctx);
-        }
-
-        // Draw game over screen
-        if (this.isGameOver) {
-            const progress = 1 - (this.gameOverTime / this.gameOverDuration);
-            this.drawGameOver(ctx, progress);
-        }
-    }
-
-    drawHeadDetails(ctx: CanvasRenderingContext2D, currentFood: Food) {
-        const head = this.rects[0];
-        const x = head.lerpX * 50;
-        const y = head.lerpY * 50;
-        const size = 50;
-        const eyeSize = 14;
-        const eyeOffset = 17;
-        const eyeY = y + eyeOffset;
-
-        // Add eyes with enhanced glow
-        ctx.shadowColor = '#fff';
-        ctx.shadowBlur = 20;
-        ctx.fillStyle = "#fff";
-
-        // Draw diamond-shaped eyes
-        const drawDiamondEye = (centerX: number, centerY: number) => {
-            ctx.beginPath();
-            ctx.moveTo(centerX, centerY - eyeSize/2);
-            ctx.lineTo(centerX + eyeSize/2, centerY);
-            ctx.lineTo(centerX, centerY + eyeSize/2);
-            ctx.lineTo(centerX - eyeSize/2, centerY);
-            ctx.closePath();
-            ctx.fill();
-        };
-
-        drawDiamondEye(x + eyeOffset, eyeY);
-        drawDiamondEye(x + size - eyeOffset, eyeY);
-
-        // Add pupils that follow movement direction
-        let pupilX = 0;
-        let pupilY = 0;
-
-        if (this.dir === 'l') pupilX = -3;
-        if (this.dir === 'r') pupilX = 3;
-        if (this.dir === 'u') pupilY = -3;
-        if (this.dir === 'd') pupilY = 3;
-
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = '#000';
-
-        // Draw larger, rounder pupils
-        const drawPupil = (centerX: number, centerY: number) => {
-            ctx.beginPath();
-            const pupilSize = eyeSize/2;
-            ctx.arc(centerX + pupilX, centerY + pupilY, pupilSize/2, 0, Math.PI * 2);
-            ctx.fill();
-        };
-
-        drawPupil(x + eyeOffset, eyeY);
-        drawPupil(x + size - eyeOffset, eyeY);
-
-        // Add cute sparkles in the eyes
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        const drawSparkle = (centerX: number, centerY: number) => {
-            // Main shine
-            ctx.beginPath();
-            ctx.arc(centerX - 2 + pupilX/2, centerY - 2 + pupilY/2, 2.5, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Small secondary shine
-            ctx.beginPath();
-            ctx.arc(centerX + 2 + pupilX/2, centerY + 2 + pupilY/2, 1.5, 0, Math.PI * 2);
-            ctx.fill();
-        };
-
-        drawSparkle(x + eyeOffset, eyeY);
-        drawSparkle(x + size - eyeOffset, eyeY);
-    }
-
-    private drawScore(ctx: CanvasRenderingContext2D) {
+    drawScore(ctx: CanvasRenderingContext2D): void {
         const x = 960;
         const y = 40;
         const hexRadius = 25;
@@ -776,7 +783,7 @@ export class Snake {
         ctx.restore();
     }
 
-    drawGameOver(ctx: CanvasRenderingContext2D, progress: number) {
+    drawGameOver(ctx: CanvasRenderingContext2D, progress: number): void {
         // Dark overlay with radial gradient
         const gradient = ctx.createRadialGradient(300, 525, 0, 300, 525, 600);
         gradient.addColorStop(0, `rgba(0, 0, 0, ${0.5 * progress})`);
@@ -788,18 +795,9 @@ export class Snake {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Calculate shake intensity based on score
-        const scoreShake = this.score <= 20
-            ? (this.score / 20) * baseShakeAmount * 4
-            : baseShakeAmount * 4 + ((this.score - 20) / 40) * baseShakeAmount * 3;
-
-        // Add both horizontal and vertical shake with different frequencies
-        const horizontalShake = Math.sin(Date.now() / 20) * scoreShake * progress;
-        const verticalShake = Math.cos(Date.now() / 25) * (scoreShake * 0.8) * progress;
-
         // Draw "GAME OVER" text with enhanced effects
         ctx.save();
-        ctx.translate(300 + horizontalShake, 450 + verticalShake);
+        ctx.translate(300, 450);
         const scale = 1 + Math.sin(Date.now() / 200) * 0.15;
         ctx.scale(scale, scale);
 
@@ -855,7 +853,7 @@ export class Snake {
         ctx.shadowBlur = 0;
     }
 
-    // Helper method to draw a key
+    // Keep drawKey as private since it's an internal helper
     private drawKey(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, text: string) {
         const radius = 5;
 
@@ -878,29 +876,10 @@ export class Snake {
         ctx.fillText(text, x, y + 2);
     }
 
-    processInput(keys: { [key: string]: boolean }) {
-        // Only allow changing nextDir, actual direction change happens during move
-        if ((keys["a"] || keys["ArrowLeft"]) && this.dir != "r") {
-            this.nextDir = "l";
-        }
-        if ((keys["d"] || keys["ArrowRight"]) && this.dir != "l") {
-            this.nextDir = "r";
-        }
-        if ((keys["w"] || keys["ArrowUp"]) && this.dir != "d") {
-            this.nextDir = "u";
-        }
-        if ((keys["s"] || keys["ArrowDown"]) && this.dir != "u") {
-            this.nextDir = "d";
-        }
-    }
-
     move() {
         const head = this.rects[0];
         let newX = head.targetX;
         let newY = head.targetY;
-
-        // Only update direction when actually moving
-        this.dir = this.nextDir;
 
         // Update position with wrap-around
         if (this.dir == "l") newX = (newX - 1 + 12) % 12;
@@ -945,28 +924,9 @@ export class Snake {
                 part.setTarget(positions[i - 1].x, positions[i - 1].y);
             }
         });
-
-        return { newX, newY };
     }
 
-    update(deltaTime: number) {
-        if (this.isGameOver) {
-            this.gameOverTime = Math.max(0, this.gameOverTime - deltaTime);
-            return;
-        }
-
-        this.moveTimer += deltaTime;
-        if (this.moveTimer >= this.moveInterval) {
-            this.moveTimer = 0;
-            this.move();
-        }
-
-        this.rects.forEach(part => {
-            part.updateLerp(deltaTime);
-        });
-    }
-
-    grow(lastPos: { x: number, y: number }) {
+    grow(lastPos: Position) {
         const newTail = new SnakePart(lastPos.x, lastPos.y);
         newTail.setTarget(lastPos.x, lastPos.y);
         this.rects.push(newTail);
@@ -979,9 +939,6 @@ export class Snake {
     }
 
     reset(x: number, y: number) {
-        // Store current style
-        const currentFoodType = this.lastFoodType;
-
         this.rects = [
             new SnakePart(x, y),
             new SnakePart(x + 1, y)
@@ -989,14 +946,11 @@ export class Snake {
         this.score = 0;
         this.dir = "l";
         this.moveTimer = 0;
-        this.moveInterval = this.baseInterval;  // Reset speed to initial value
-
-        // Restore the current food style
-        this.lastFoodType = currentFoodType;
-        this.transitionTime = this.transitionDuration;
-        this.effectRotation = 0;
+        this.moveInterval = this.baseInterval;
         this.isGameOver = false;
         this.gameOverTime = 0;
+        this.lives = 1;
+        this.isGhostMode = false;
     }
 
     checkFoodCollision(food: Food): boolean {
@@ -1009,11 +963,6 @@ export class Snake {
 
             // Update score based on food type
             this.score += food.points;
-
-            // Update snake style to match the new current food
-            this.lastFoodType = food;
-            this.transitionTime = this.transitionDuration;
-            this.effectRotation = 0;
 
             return true;
         }

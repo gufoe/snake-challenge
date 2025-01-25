@@ -1,102 +1,111 @@
 import { Food, foodTypes, StarFood } from './food';
 import { Snake } from './snake';
 import { Particle } from './particle';
-import { PopupText } from './popup';
+import { PopupText, POPUP_MESSAGES } from './popup';
 import { randInt } from './utils';
+import { Updateable, Drawable } from './types';
 
-export class GameState {
+export class GameState implements Updateable, Drawable {
+    snake: Snake;
+    currentFood: Food | null = null;
     particles: Particle[] = [];
     popupTexts: PopupText[] = [];
     glowIntensity: number = 0;
     keys: { [key: string]: boolean } = {};
-    currentFood: Food;
-    currentFoodIndex: number;
-    nextFoodType: Food;
-    snake: Snake;
+    currentFoodIndex: number = 0;
+    nextFoodType: Food | null = null;
 
     constructor() {
-        // Initialize food system
-        this.currentFoodIndex = Math.floor(Math.random() * foodTypes.length);
-        const initialFoodType = foodTypes[this.currentFoodIndex];
-        this.currentFood = new initialFoodType(randInt(12), randInt(21));
-
-        // Create snake
-        this.snake = new Snake(randInt(12), randInt(21));
-        this.snake.lastFoodType = this.currentFood;
-        this.snake.transitionTime = 0; // No transition needed for initial state
-
-        // Prepare next food
-        this.currentFoodIndex = (this.currentFoodIndex + 1) % foodTypes.length;
-        const NextFoodType = foodTypes[this.currentFoodIndex];
-        this.nextFoodType = new NextFoodType(0, 0);
-    }
-
-    spawnNewFood() {
-        let x: number, y: number;
-        do {
-            x = randInt(12);
-            y = randInt(21);
-        } while (this.snake.rects.some((r) => r.targetX == x && r.targetY == y));
-
-        // Current food becomes the previously prepared next food
-        if (this.nextFoodType) {
-            this.currentFood = this.nextFoodType;
-            this.currentFood.x = x;
-            this.currentFood.y = y;
-        } else {
-            // First food spawn
-            this.currentFoodIndex = Math.floor(Math.random() * foodTypes.length);
-            const FoodType = foodTypes[this.currentFoodIndex];
-            this.currentFood = new FoodType(x, y);
-        }
-
-        // Prepare next food
-        this.currentFoodIndex = (this.currentFoodIndex + 1) % foodTypes.length;
-        const NextFoodType = foodTypes[this.currentFoodIndex];
-        this.nextFoodType = new NextFoodType(0, 0);
-    }
-
-    reset() {
-        this.snake.reset(randInt(12), randInt(21));
-        this.particles = [];
-        this.glowIntensity = 0;
+        this.snake = new Snake(6, 10);
         this.spawnNewFood();
-        // Reset snake style to match current food
-        this.snake.lastFoodType = this.currentFood;
-        this.snake.transitionTime = this.snake.transitionDuration;
-    }
-
-    processInput(e: KeyboardEvent) {
-        if ((e.key === "Enter" || e.code === "Space") && this.snake.isGameOver) {
-            this.reset();
-            return;
+        // Set initial snake style to match first food
+        if (this.currentFood) {
+            this.snake.lastFoodType = this.currentFood;
+            this.snake.transitionTime = 0;
+            this.snake.effectRotation = 0;
         }
-
-        this.keys = {};
-        this.keys[e.key] = true;
-        this.snake.processInput(this.keys);
     }
 
-    update(deltaTime: number) {
-        // Update food animation
-        this.currentFood.update();
+    update(deltaTime: number): void {
+        // Update snake
+        this.snake.update(deltaTime);
+
+        // Update food animations
+        if (this.currentFood) {
+            this.currentFood.update();
+            // Always keep snake style matching current food
+            this.snake.lastFoodType = this.currentFood;
+        }
 
         // Update particles
         this.particles = this.particles.filter(p => p.life > 0);
         this.particles.forEach(p => {
             p.update();
+            // Scale deltaTime to match particle life values (convert ms to frames at 60fps)
+            p.life -= (deltaTime / 16.67);
         });
 
         // Update popup texts
-        this.popupTexts = this.popupTexts.filter(t => t.life > 0);
-        this.popupTexts.forEach(t => {
-            t.update();
-        });
+        this.popupTexts = this.popupTexts.filter(p => p.life > 0);
+        this.popupTexts.forEach(p => p.update());
 
-        // Fade out glow intensity
-        this.glowIntensity = Math.max(0, this.glowIntensity - deltaTime * 0.1);
+        // Check for food collision
+        if (this.currentFood && this.snake.checkFoodCollision(this.currentFood)) {
+            // Create food collection effects
+            this.currentFood.createEatEffect(this.particles);
 
-        // Update snake
-        this.snake.update(deltaTime);
+            // Create popup text
+            const foodX = this.currentFood.x * 50 + 25;
+            const foodY = this.currentFood.y * 50 + 25;
+            const message = POPUP_MESSAGES[Math.floor(Math.random() * POPUP_MESSAGES.length)];
+            this.popupTexts.push(new PopupText(message, foodX, foodY));
+
+            // Reset transition effect
+            this.snake.transitionTime = 0;
+            this.snake.effectRotation = 0;
+
+            // Spawn new food
+            this.spawnNewFood();
+        }
+    }
+
+    draw(ctx: CanvasRenderingContext2D): void {
+        // Draw food
+        if (this.currentFood) {
+            this.currentFood.draw(ctx);
+        }
+
+        // Draw particles
+        this.particles.forEach(p => p.draw(ctx));
+
+        // Draw snake
+        this.snake.draw(ctx);
+
+        // Draw popup texts
+        this.popupTexts.forEach(p => p.draw(ctx));
+    }
+
+    spawnNewFood(): void {
+        let x: number, y: number;
+        do {
+            x = randInt(12);
+            y = randInt(21);
+        } while (this.snake.rects.some(r => r.targetX === x && r.targetY === y));
+
+        const foodType = foodTypes[randInt(foodTypes.length)];
+        this.currentFood = new foodType(x, y);
+    }
+
+    reset(): void {
+        this.snake.reset(6, 10);
+        this.particles = [];
+        this.popupTexts = [];
+        this.spawnNewFood();
+        // Reset snake style to match new food
+        if (this.currentFood) {
+            this.snake.lastFoodType = this.currentFood;
+            this.snake.transitionTime = 0;
+            this.snake.effectRotation = 0;
+        }
     }
 }

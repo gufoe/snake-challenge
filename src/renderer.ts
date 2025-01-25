@@ -7,76 +7,80 @@ export class Renderer {
     private ctx: CanvasRenderingContext2D;
     private screenShake: ScreenShake;
     private ambientParticles: AmbientParticle[];
+    private width: number;
+    private height: number;
+    private shakeTime: number = 0;
+    private shakeIntensity: number = 0;
+    private readonly shakeDuration: number = 200;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d')!;
         this.screenShake = new ScreenShake();
-        this.ambientParticles = [];
+        this.width = canvas.width;
+        this.height = canvas.height;
 
-        // Initialize ambient particles
-        for (let i = 0; i < 50; i++) {
-            this.ambientParticles.push(new AmbientParticle());
-        }
+        // Initialize ambient particles in layers
+        this.ambientParticles = [
+            // Background layer (slower, larger particles)
+            ...Array(50).fill(0).map(() => {
+                const p = new AmbientParticle();
+                p.speed *= 0.5;
+                p.size *= 2.5;  // Increased size for more visibility
+                p.opacity = Math.random() * 0.4 + 0.2;  // Increased opacity range (0.2 to 0.6)
+                return p;
+            }),
+            // Middle layer
+            ...Array(75).fill(0).map(() => {
+                const p = new AmbientParticle();
+                p.opacity = Math.random() * 0.5 + 0.3;  // Increased opacity range (0.3 to 0.8)
+                return p;
+            }),
+            // Foreground layer (faster, smaller particles)
+            ...Array(25).fill(0).map(() => {
+                const p = new AmbientParticle();
+                p.speed *= 1.5;
+                p.size *= 0.7;
+                p.opacity = Math.random() * 0.6 + 0.4;  // Increased opacity range (0.4 to 1.0)
+                return p;
+            })
+        ];
     }
 
-    draw(gameState: GameState) {
-        const { ctx } = this;
-
-        // Clear canvas with black background
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    draw(gameState: GameState): void {
+        // Clear canvas with a dark background
+        this.ctx.fillStyle = '#1a1a1a';
+        this.ctx.fillRect(0, 0, this.width, this.height);
 
         // Apply screen shake
-        this.screenShake.update();
-        ctx.save();
-        ctx.translate(this.screenShake.offsetX, this.screenShake.offsetY);
-
-        // Draw background grid
-        ctx.strokeStyle = '#2a2a2a';
-        ctx.lineWidth = 1;
-
-        // Vertical lines
-        for (let x = 0; x <= 600; x += 50) {
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, 1050);
-            ctx.stroke();
-        }
-
-        // Horizontal lines
-        for (let y = 0; y <= 1050; y += 50) {
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(600, y);
-            ctx.stroke();
-        }
+        this.applyScreenShake();
 
         // Draw ambient particles
-        this.ambientParticles.forEach(p => p.draw(ctx, gameState.currentFood));
+        this.ambientParticles.forEach(p => {
+            p.update(16.67); // Assuming 60fps
+            p.draw(this.ctx, gameState.currentFood);
+        });
 
-        // Draw food
-        gameState.currentFood.draw(ctx);
+        // Draw game elements
+        gameState.draw(this.ctx);
 
-        // Draw snake
-        gameState.snake.draw(ctx, gameState.currentFood);
-
-        // Draw particles
-        gameState.particles.forEach(p => p.draw(ctx));
-
-        // Draw popup texts
-        gameState.popupTexts.forEach(t => t.draw(ctx));
-
-        // Draw game over screen if needed
-        if (gameState.snake.isGameOver) {
-            gameState.snake.drawGameOver(ctx);
-        }
-
-        // Restore canvas transform
-        ctx.restore();
+        // Reset transform
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
 
-    startShake(intensity: number, duration: number) {
-        this.screenShake.start(intensity, duration);
+    private applyScreenShake(): void {
+        if (this.shakeTime > 0) {
+            const progress = this.shakeTime / this.shakeDuration;
+            const intensity = this.shakeIntensity * progress;
+            const offsetX = Math.sin(Date.now() / 50) * intensity;
+            const offsetY = Math.cos(Date.now() / 40) * intensity;
+            this.ctx.translate(offsetX, offsetY);
+            this.shakeTime = Math.max(0, this.shakeTime - 16.67); // Assuming 60fps
+        }
+    }
+
+    startShake(intensity: number, duration: number = this.shakeDuration): void {
+        this.shakeIntensity = intensity;
+        this.shakeTime = duration;
     }
 }
