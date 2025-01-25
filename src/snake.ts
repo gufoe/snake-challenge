@@ -152,7 +152,7 @@ function gameLoop() {
     }
 
     // Check for power-up collision
-    if (currentPowerUp && snake.rects[0].targetX === currentPowerUp.x && snake.rects[0].targetY === currentPowerUp.y) {
+    if (currentPowerUp && snake.checkPowerUpCollision(currentPowerUp)) {
         currentPowerUp.applyEffect(snake);
         currentPowerUp.createCollectEffect(snake.rects[0].targetX, snake.rects[0].targetY);
         currentPowerUp = null;
@@ -417,6 +417,9 @@ export class Snake implements Updateable, Drawable {
     gameOverTime = 0;
     gameOverDuration = 1000;
     isGhostMode = false;
+    ghostModeEndTime = 0;
+    isSlowMotion = false;
+    slowMotionEndTime = 0;
     private inputHandler: InputHandler;
     private lastMoveDirection: Direction = "l";  // Track the actual last move direction
 
@@ -447,6 +450,16 @@ export class Snake implements Updateable, Drawable {
         if (this.isGameOver) {
             this.gameOverTime = Math.max(0, this.gameOverTime - deltaTime);
             return;
+        }
+
+        // Update power-up states
+        const currentTime = Date.now();
+        if (this.isGhostMode && currentTime > this.ghostModeEndTime) {
+            this.isGhostMode = false;
+        }
+        if (this.isSlowMotion && currentTime > this.slowMotionEndTime) {
+            this.isSlowMotion = false;
+            this.moveInterval /= 1.5; // Reset speed
         }
 
         // Only update rotation for effects
@@ -525,6 +538,14 @@ export class Snake implements Updateable, Drawable {
                 const x = r.lerpX * 50;
                 const y = r.lerpY * 50;
                 effect(ctx, x, y, 50);
+            }
+
+            // Draw power-up effects
+            if (this.isGhostMode) {
+                this.drawGhostEffect(ctx, r, i);
+            }
+            if (this.isSlowMotion) {
+                this.drawSlowMotionEffect(ctx, r, i);
             }
         });
 
@@ -938,6 +959,9 @@ export class Snake implements Updateable, Drawable {
         this.gameOverTime = 0;
         this.lives = 1;
         this.isGhostMode = false;
+        this.ghostModeEndTime = 0;
+        this.isSlowMotion = false;
+        this.slowMotionEndTime = 0;
     }
 
     checkFoodCollision(food: Food): boolean {
@@ -954,5 +978,106 @@ export class Snake implements Updateable, Drawable {
             return true;
         }
         return false;
+    }
+
+    checkPowerUpCollision(powerUp: PowerUp): boolean {
+        if (this.isGameOver) return false;
+        const head = this.rects[0];
+        return head.targetX === powerUp.x && head.targetY === powerUp.y;
+    }
+
+    private drawGhostEffect(ctx: CanvasRenderingContext2D, part: SnakePart, index: number) {
+        const x = part.lerpX * 50;
+        const y = part.lerpY * 50;
+        const size = 50;
+
+        ctx.save();
+
+        // Make the snake semi-transparent when in ghost mode
+        ctx.globalAlpha = 0.6;
+
+        // Add ghost aura with stronger opacity
+        const pulseAlpha = 0.6 + Math.sin(this.effectRotation + index * 0.2) * 0.2;
+
+        // Create larger ghost aura gradient
+        const gradient = ctx.createRadialGradient(
+            x + size/2, y + size/2, size/3,
+            x + size/2, y + size/2, size
+        );
+        gradient.addColorStop(0, `rgba(147, 112, 219, ${pulseAlpha})`);
+        gradient.addColorStop(0.5, `rgba(147, 112, 219, ${pulseAlpha * 0.5})`);
+        gradient.addColorStop(1, 'rgba(147, 112, 219, 0)');
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(x + size/2, y + size/2, size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Add ethereal particles with stronger glow
+        ctx.shadowColor = 'rgba(147, 112, 219, 0.8)';
+        ctx.shadowBlur = 10;
+
+        for (let i = 0; i < 5; i++) {
+            const angle = this.effectRotation * 2 + index * 0.5 + i * (Math.PI * 2 / 5);
+            const radius = size/2 + Math.sin(this.effectRotation * 3 + i) * 8;
+            const px = x + size/2 + Math.cos(angle) * radius;
+            const py = y + size/2 + Math.sin(angle) * radius;
+
+            // Draw larger ghost particles
+            ctx.beginPath();
+            ctx.arc(px, py, 3, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(147, 112, 219, 0.8)';
+            ctx.fill();
+        }
+
+        // Add ghostly trails
+        ctx.strokeStyle = 'rgba(147, 112, 219, 0.4)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i++) {
+            const trailAngle = this.effectRotation + i * (Math.PI * 2 / 3);
+            const trailLength = size/2 + Math.sin(this.effectRotation * 2) * 10;
+
+            ctx.beginPath();
+            ctx.moveTo(x + size/2, y + size/2);
+            ctx.lineTo(
+                x + size/2 + Math.cos(trailAngle) * trailLength,
+                y + size/2 + Math.sin(trailAngle) * trailLength
+            );
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
+    private drawSlowMotionEffect(ctx: CanvasRenderingContext2D, part: SnakePart, index: number) {
+        const x = part.lerpX * 50;
+        const y = part.lerpY * 50;
+        const size = 50;
+
+        ctx.save();
+        ctx.globalAlpha = 0.4 + Math.sin(this.effectRotation + index * 0.1) * 0.1;
+
+        // Time ripple effect
+        const rippleSize = size/2 + Math.sin(this.effectRotation * 2 + index * 0.3) * 10;
+        ctx.strokeStyle = '#4fc3f7';
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+        ctx.arc(x + size/2, y + size/2, rippleSize, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Clock hand effect
+        const handLength = size/3;
+        const handAngle = this.effectRotation * 2 + index * 0.2;
+
+        ctx.beginPath();
+        ctx.moveTo(x + size/2, y + size/2);
+        ctx.lineTo(
+            x + size/2 + Math.cos(handAngle) * handLength,
+            y + size/2 + Math.sin(handAngle) * handLength
+        );
+        ctx.stroke();
+
+        ctx.restore();
     }
 }

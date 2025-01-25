@@ -1,4 +1,5 @@
 import { Particle } from './particle';
+import { Snake } from './snake';
 
 export abstract class PowerUp {
     x: number;
@@ -28,7 +29,7 @@ export abstract class PowerUp {
 
     abstract draw(ctx: CanvasRenderingContext2D): void;
     abstract createCollectEffect(x: number, y: number): Particle[];
-    abstract applyEffect(snake: any): void;
+    abstract applyEffect(snake: Snake): void;
 }
 
 // Extra Life (Heart-shaped)
@@ -72,7 +73,7 @@ export class ExtraLifePowerUp extends PowerUp {
         return particles;
     }
 
-    applyEffect(snake: any) {
+    applyEffect(snake: Snake) {
         snake.lives = (snake.lives || 1) + 1;
     }
 }
@@ -120,11 +121,10 @@ export class TimeSlowPowerUp extends PowerUp {
         return particles;
     }
 
-    applyEffect(snake: any) {
+    applyEffect(snake: Snake) {
+        snake.isSlowMotion = true;
         snake.moveInterval *= 1.5; // Slow down by 50%
-        setTimeout(() => {
-            snake.moveInterval /= 1.5; // Reset speed after 5 seconds
-        }, 5000);
+        snake.slowMotionEndTime = Date.now() + 5000; // 5 seconds duration
     }
 }
 
@@ -176,11 +176,9 @@ export class GhostPowerUp extends PowerUp {
         return particles;
     }
 
-    applyEffect(snake: any) {
+    applyEffect(snake: Snake) {
         snake.isGhostMode = true;
-        setTimeout(() => {
-            snake.isGhostMode = false;
-        }, 7000);
+        snake.ghostModeEndTime = Date.now() + 7000; // 7 seconds duration
     }
 }
 
