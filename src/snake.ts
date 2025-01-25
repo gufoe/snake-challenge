@@ -205,13 +205,10 @@ function gameLoop() {
 }
 
 export class SnakePart implements Position {
-    // Current interpolated position (smooth movement)
     public lerpX: number;
     public lerpY: number;
-    // Target grid position to move towards
     public targetX: number;
     public targetY: number;
-    // Progress of movement from current to target position (0 to 1)
     public progress: number = 1;
 
     constructor(public x: number, public y: number) {
@@ -222,32 +219,25 @@ export class SnakePart implements Position {
     }
 
     setTarget(x: number, y: number) {
-        // Current target becomes new starting position
         this.x = this.targetX;
         this.y = this.targetY;
-        // Set new target position
         this.targetX = x;
         this.targetY = y;
-        // Reset progress for new movement
         this.progress = 0;
     }
 
-    updateLerp(deltaTime: number) {
-        // Calculate movement speed based on time elapsed
-        const speed = deltaTime / 150; // 150ms to move one cell
+    updateLerp(deltaTime: number, moveInterval: number) {
+        // Use the current move interval for animation timing
+        const speed = deltaTime / moveInterval;
 
-        // Update progress towards target position
         this.progress = Math.min(1, this.progress + speed);
 
-        // Calculate the shortest path to target (handling wrap-around)
         let dx = this.targetX - this.x;
         let dy = this.targetY - this.y;
 
-        // Handle wrap-around movement across screen edges
         if (Math.abs(dx) > 6) {
             if (dx > 0) dx -= 12;
             else dx += 12;
-            // Adjust the current position for smoother wrap-around
             if (this.progress === 0) {
                 if (dx < 0) this.x = 12;
                 else this.x = -1;
@@ -256,18 +246,15 @@ export class SnakePart implements Position {
         if (Math.abs(dy) > 10) {
             if (dy > 0) dy -= 21;
             else dy += 21;
-            // Adjust the current position for smoother wrap-around
             if (this.progress === 0) {
                 if (dy < 0) this.y = 21;
                 else this.y = -1;
             }
         }
 
-        // Update interpolated position
         this.lerpX = this.x + dx * this.progress;
         this.lerpY = this.y + dy * this.progress;
 
-        // Keep interpolated positions within bounds
         if (this.lerpX < 0) this.lerpX += 12;
         if (this.lerpX >= 12) this.lerpX -= 12;
         if (this.lerpY < 0) this.lerpY += 21;
@@ -481,7 +468,7 @@ export class Snake implements Updateable, Drawable {
         }
 
         this.rects.forEach(part => {
-            part.updateLerp(deltaTime);
+            part.updateLerp(deltaTime, this.moveInterval);
         });
     }
 

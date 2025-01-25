@@ -3,7 +3,8 @@ import { Direction } from './types';
 export class InputHandler {
     private keys: { [key: string]: boolean } = {};
     private currentDirection: Direction = 'l';
-    private nextDirection: Direction = 'l';
+    private directionQueue: Direction[] = ['l'];  // Queue of directions to process
+    private maxQueueSize = 3;  // Limit queue size to prevent too many buffered inputs
 
     constructor() {
         window.addEventListener('keydown', (e) => {
@@ -41,18 +42,32 @@ export class InputHandler {
 
         if (!newDirection) return;
 
-        // If the new direction is valid (not opposite to current direction)
-        if (!this.isOppositeDirection(newDirection, this.currentDirection)) {
-            this.nextDirection = newDirection;
+        // Get the last direction in the queue
+        const lastDirection = this.directionQueue[this.directionQueue.length - 1];
+
+        // Only add to queue if it's not the same as the last direction and not opposite to the last queued direction
+        if (newDirection !== lastDirection && !this.isOppositeDirection(newDirection, lastDirection)) {
+            // Add to queue if within size limit
+            if (this.directionQueue.length < this.maxQueueSize) {
+                this.directionQueue.push(newDirection);
+            }
         }
     }
 
     public getNextDirection(): Direction {
-        return this.nextDirection;
+        // If queue is empty, return current direction
+        if (this.directionQueue.length === 0) {
+            return this.currentDirection;
+        }
+        return this.directionQueue[0];
     }
 
     public setCurrentDirection(dir: Direction) {
         this.currentDirection = dir;
+        // Remove the direction we just used from the queue
+        if (this.directionQueue.length > 0) {
+            this.directionQueue.shift();
+        }
     }
 
     public isKeyPressed(key: string): boolean {
