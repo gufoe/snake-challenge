@@ -6,9 +6,8 @@ import { hexToRgb } from './utils';
 export class SnakeRenderer {
     private effectRotation = 0;
 
-    constructor() {}
 
-    updateEffects(deltaTime: number) {
+    updateEffects() {
         this.effectRotation += 0.1;
     }
 

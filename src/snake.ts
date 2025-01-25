@@ -1,12 +1,12 @@
-import { CrystalFood, Food, PulsarFood, RainbowFood, StarFood } from './food';
+import { GRID_HEIGHT, GRID_WIDTH, INITIAL_LIVES } from './constants';
+import { Food } from './food';
+import { GameUI } from './game-ui';
 import { InputHandler } from './input-handler';
 import { PowerUp } from './powerup';
-import { Direction, Drawable, Position, Updateable } from './types';
-import { hexToRgb, randInt } from './utils';
 import { SnakePart } from './snake-part';
 import { SnakeRenderer } from './snake-renderer';
-import { GameUI } from './game-ui';
-import { CELL_SIZE, GRID_HEIGHT, GRID_WIDTH, INITIAL_LIVES } from './constants';
+import { Direction, Drawable, Position, Updateable } from './types';
+import { randInt } from './utils';
 
 export class Snake implements Updateable, Drawable {
     score = 0;
@@ -69,7 +69,7 @@ export class Snake implements Updateable, Drawable {
             this.moveInterval /= 1.5; // Reset speed
         }
 
-        this.renderer.updateEffects(deltaTime);
+        this.renderer.updateEffects();
 
         this.moveTimer += deltaTime;
         if (this.moveTimer >= this.moveInterval) {
@@ -134,8 +134,8 @@ export class Snake implements Updateable, Drawable {
 
     private checkCollision(newPos: Position): boolean {
         return !this.isGhostMode &&
-               this.rects.length > 2 &&
-               this.rects.slice(1).some(r => r.targetX === newPos.x && r.targetY === newPos.y);
+            this.rects.length > 2 &&
+            this.rects.slice(1).some(r => r.targetX === newPos.x && r.targetY === newPos.y);
     }
 
     private handleCollision() {
@@ -156,7 +156,7 @@ export class Snake implements Updateable, Drawable {
         ];
         // Regrow to previous length
         for (let i = 2; i < oldLength; i++) {
-            this.grow({ x: this.rects[i-1].targetX, y: this.rects[i-1].targetY });
+            this.grow({ x: this.rects[i - 1].targetX, y: this.rects[i - 1].targetY });
         }
     }
 

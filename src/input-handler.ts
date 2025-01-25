@@ -18,7 +18,6 @@ type ValidKey = keyof KeyMap;
 export class InputHandler {
     private keys: Set<string> = new Set();
     private directionQueue: Direction[] = ['l'];
-    private readonly maxQueueSize = 2;
 
     constructor() {
         window.addEventListener('keydown', this.handleKeyDown.bind(this));

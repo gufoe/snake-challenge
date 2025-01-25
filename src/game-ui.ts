@@ -1,4 +1,3 @@
-import { CELL_SIZE } from './constants';
 
 export class GameUI {
     drawScore(ctx: CanvasRenderingContext2D, score: number, lastFoodColor: string) {

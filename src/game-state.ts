@@ -25,7 +25,6 @@ export class GameState implements Updateable, Drawable {
         if (this.currentFood) {
             this.snake.lastFoodType = this.currentFood;
             this.snake.transitionTime = 0;
-            this.snake.effectRotation = 0;
         }
     }
 
@@ -82,7 +81,6 @@ export class GameState implements Updateable, Drawable {
 
             // Reset transition effect
             this.snake.transitionTime = 0;
-            this.snake.effectRotation = 0;
 
             // Spawn new food
             this.spawnNewFood();
@@ -192,7 +190,6 @@ export class GameState implements Updateable, Drawable {
         if (this.currentFood) {
             this.snake.lastFoodType = this.currentFood;
             this.snake.transitionTime = 0;
-            this.snake.effectRotation = 0;
         }
     }
 }
