@@ -124,25 +124,4 @@ export class GameUI {
         ctx.shadowBlur = 0;
     }
 
-    private drawKey(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, text: string) {
-        const radius = 5;
-
-        // Draw key background
-        ctx.beginPath();
-        ctx.moveTo(x - width/2 + radius, y - height/2);
-        ctx.lineTo(x + width/2 - radius, y - height/2);
-        ctx.quadraticCurveTo(x + width/2, y - height/2, x + width/2, y - height/2 + radius);
-        ctx.lineTo(x + width/2, y + height/2 - radius);
-        ctx.quadraticCurveTo(x + width/2, y + height/2, x + width/2 - radius, y + height/2);
-        ctx.lineTo(x - width/2 + radius, y + height/2);
-        ctx.quadraticCurveTo(x - width/2, y + height/2, x - width/2, y + height/2 - radius);
-        ctx.lineTo(x - width/2, y - height/2 + radius);
-        ctx.quadraticCurveTo(x - width/2, y - height/2, x - width/2 + radius, y - height/2);
-        ctx.stroke();
-
-        // Draw key text with proper centering
-        ctx.textAlign = 'center';
-        ctx.font = '16px Arial';
-        ctx.fillText(text, x, y + 2);
-    }
 }

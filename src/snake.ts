@@ -211,24 +211,6 @@ export class Snake implements Updateable, Drawable {
         this.spawnPortalEffect.drawForeground(ctx, this.spawnPortal.x, this.spawnPortal.y, '#44ff44');
     }
 
-    private finalizeRespawn() {
-        // Set all segments to their new positions
-        this.rects.forEach((segment, i) => {
-            if (i === 0) {
-                segment.setImmediate(this.spawnPortal.x, this.spawnPortal.y);
-            } else {
-                const prevSegment = this.rects[i - 1];
-                segment.setImmediate(prevSegment.targetX, prevSegment.targetY);
-            }
-        });
-
-        // Reset movement state
-        this.moveTimer = this.moveInterval;
-        this.dir = "r";
-
-        // Call the respawn callback if it exists
-        this.onRespawn?.();
-    }
 
     move() {
         const head = this.rects[0];
