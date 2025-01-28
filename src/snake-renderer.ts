@@ -11,7 +11,7 @@ export class SnakeRenderer {
         this.effectRotation += 0.1;
     }
 
-    drawSnake(ctx: CanvasRenderingContext2D, parts: SnakePart[], lastFoodType: Food | null, isGhostMode: boolean, isSlowMotion: boolean) {
+    drawSnake(ctx: CanvasRenderingContext2D, parts: SnakePart[], lastFoodType: Food | null, isGhostMode: boolean, isSlowMotion: boolean, isBodySegment: boolean = false) {
         // Draw trail effect with gradient
         this.drawTrailEffect(ctx, parts, lastFoodType);
 
@@ -21,7 +21,7 @@ export class SnakeRenderer {
             const { color, effect } = this.getSegmentColor(lastFoodType, i);
 
             // Draw base segment
-            this.drawSnakePart(ctx, r, color, i === 0, nextPart);
+            this.drawSnakePart(ctx, r, color, !isBodySegment && i === 0, nextPart);
 
             // Apply special effect if any
             if (effect) {
@@ -40,7 +40,7 @@ export class SnakeRenderer {
         });
 
         // Draw head details last
-        if (parts.length > 0) {
+        if (!isBodySegment && parts.length > 0) {
             this.drawHeadDetails(ctx, parts[0]);
         }
     }

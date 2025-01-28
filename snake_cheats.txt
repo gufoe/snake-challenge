@@ -1,0 +1,49 @@
+// Snake Game Cheat Sheet
+
+// The game state is now globally available as 'gs'
+// No setup needed, just use the commands below!
+
+// Cheat Commands:
+
+// 1. Increase Score
+gs.snake.score += 1000;
+
+// 2. Add Extra Lives
+gs.snake.lives += 5;
+
+// 3. Make Snake Longer
+for(let i = 0; i < 10; i++) {
+  gs.snake.grow({x: gs.snake.rects[gs.snake.rects.length-1].targetX, y: gs.snake.rects[gs.snake.rects.length-1].targetY});
+}
+
+// 4. Change Snake Speed
+gs.snake.moveInterval = 150;  // Default speed
+gs.snake.moveInterval = 60;   // Max speed
+gs.snake.moveInterval = 300;  // Slow speed
+
+// 5. Toggle Ghost Mode
+gs.snake.isGhostMode = true;
+gs.snake.ghostModeEndTime = Date.now() + 10000;  // 10 seconds duration
+
+// 6. Toggle Slow Motion
+gs.snake.isSlowMotion = true;
+gs.snake.slowMotionEndTime = Date.now() + 10000;  // 10 seconds duration
+
+// 7. Spawn New Food
+gs.spawnNewFood();
+
+// 8. Spawn New Power-Up
+gs.spawnNewPowerUp();
+
+// 9. Reset Game
+gs.reset();
+
+// 10. Force Game Over
+gs.snake.isGameOver = true;
+gs.snake.gameOverTime = 1000;
+
+// 11. Change Snake Direction
+gs.snake.dir = 'u';  // up
+gs.snake.dir = 'd';  // down
+gs.snake.dir = 'l';  // left
+gs.snake.dir = 'r';  // right

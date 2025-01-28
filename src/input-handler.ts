@@ -18,10 +18,17 @@ type ValidKey = keyof KeyMap;
 export class InputHandler {
     private keys: Set<string> = new Set();
     private directionQueue: Direction[] = ['l'];
+    private touchStartX: number = 0;
+    private touchStartY: number = 0;
+    private readonly minSwipeDistance: number = 30;
 
     constructor() {
         window.addEventListener('keydown', this.handleKeyDown.bind(this));
         window.addEventListener('keyup', this.handleKeyUp.bind(this));
+
+        // Add touch event listeners
+        window.addEventListener('touchstart', this.handleTouchStart.bind(this));
+        window.addEventListener('touchend', this.handleTouchEnd.bind(this));
     }
 
     private handleKeyDown(e: KeyboardEvent): void {
@@ -63,6 +70,39 @@ export class InputHandler {
         const newDirection = KEY_MAPPINGS[lastPressedKey];
         const lastDirection = this.directionQueue[this.directionQueue.length - 1];
 
+        if (newDirection !== lastDirection && !this.isOppositeDirection(newDirection, lastDirection)) {
+            this.directionQueue = [lastDirection, newDirection];
+        }
+    }
+
+    private handleTouchStart(e: TouchEvent): void {
+        e.preventDefault();
+        const touch = e.touches[0];
+        this.touchStartX = touch.clientX;
+        this.touchStartY = touch.clientY;
+    }
+
+    private handleTouchEnd(e: TouchEvent): void {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        const deltaX = touch.clientX - this.touchStartX;
+        const deltaY = touch.clientY - this.touchStartY;
+
+        // Only process swipe if the distance is greater than minimum threshold
+        if (Math.abs(deltaX) < this.minSwipeDistance && Math.abs(deltaY) < this.minSwipeDistance) {
+            return;
+        }
+
+        let newDirection: Direction;
+
+        // Determine swipe direction based on which delta is larger
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+            newDirection = deltaX > 0 ? 'r' : 'l';
+        } else {
+            newDirection = deltaY > 0 ? 'd' : 'u';
+        }
+
+        const lastDirection = this.directionQueue[this.directionQueue.length - 1];
         if (newDirection !== lastDirection && !this.isOppositeDirection(newDirection, lastDirection)) {
             this.directionQueue = [lastDirection, newDirection];
         }

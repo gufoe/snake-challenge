@@ -3,6 +3,13 @@ import { GameState } from './game-state';
 import { Renderer } from './renderer';
 import { AmbientParticle } from './ambient-particle';
 
+// Declare gs on window
+declare global {
+    interface Window {
+        gs: GameState;
+    }
+}
+
 // Remove unused imports
 
 // Set up the canvas element in the HTML
@@ -19,6 +26,8 @@ canvas.height = 1050;
 
 // Initialize game state and renderer
 const gameState = new GameState();
+// Expose game state globally
+window.gs = gameState;
 const renderer = new Renderer(canvas);
 
 // Add keyboard event handling
@@ -30,6 +39,14 @@ window.addEventListener('keydown', (e) => {
     // Prevent default behavior for arrow keys and space to avoid scrolling
     if (e.key.startsWith('Arrow') || e.code === 'Space') {
         e.preventDefault();
+    }
+});
+
+// Add touch event handling for game restart
+canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (gameState.snake.isGameOver) {
+        gameState.reset();
     }
 });
 

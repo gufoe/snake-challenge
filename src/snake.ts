@@ -7,6 +7,7 @@ import { SnakePart } from './snake-part';
 import { SnakeRenderer } from './snake-renderer';
 import { Direction, Drawable, Position, Updateable } from './types';
 import { randInt } from './utils';
+import { PortalEffect } from './portal-effect';
 
 export class Snake implements Updateable, Drawable {
     score = 0;
@@ -28,11 +29,21 @@ export class Snake implements Updateable, Drawable {
     private inputHandler: InputHandler;
     private renderer: SnakeRenderer;
     private ui: GameUI;
+    onRespawn?: () => void;
 
     // Add transition properties
     transitionTime = 0;
     transitionDuration = 1000; // 1 second transition
     lastFoodType: Food | null = null;
+
+    // Add portal transition properties
+    private isRespawning = false;
+    private respawnProgress = 0;
+    private deathPortal = { x: 0, y: 0 };
+    private spawnPortal = { x: 0, y: 0 };
+    private respawnDelay = 50; // ms delay between each segment respawning
+    private deathPortalEffect: PortalEffect;
+    private spawnPortalEffect: PortalEffect;
 
     constructor(x: number, y: number) {
         this.rects = [
@@ -42,6 +53,8 @@ export class Snake implements Updateable, Drawable {
         this.inputHandler = new InputHandler();
         this.renderer = new SnakeRenderer();
         this.ui = new GameUI();
+        this.deathPortalEffect = new PortalEffect();
+        this.spawnPortalEffect = new PortalEffect();
     }
 
     private isOppositeDirection(dir1: Direction, dir2: Direction): boolean {
@@ -56,6 +69,66 @@ export class Snake implements Updateable, Drawable {
     update(deltaTime: number) {
         if (this.isGameOver) {
             this.gameOverTime = Math.max(0, this.gameOverTime - deltaTime);
+            return;
+        }
+
+        // Update portal effects
+        if (this.isRespawning) {
+            this.deathPortalEffect.update(deltaTime);
+            this.spawnPortalEffect.update(deltaTime);
+        }
+
+        // Handle respawn transition
+        if (this.isRespawning) {
+            this.respawnProgress += deltaTime;
+            const segmentDelay = this.respawnDelay;
+            const totalTime = segmentDelay * this.rects.length;
+
+            // Continue normal movement even during respawn
+            this.moveTimer += deltaTime;
+            if (this.moveTimer >= this.moveInterval) {
+                this.moveTimer = 0;
+                const nextDir = this.inputHandler.getNextDirection();
+                if (!this.isOppositeDirection(nextDir, this.dir)) {
+                    this.dir = nextDir;
+                }
+                this.updateSnakePositions(this.getNewPosition(this.rects[0]));
+            }
+
+            // Check each segment for portal collision
+            this.rects.forEach((segment, i) => {
+                if (i > 0) { // Skip head as it's already teleported
+                    const distToDeathPortal = Math.sqrt(
+                        Math.pow(segment.x - this.deathPortal.x, 2) +
+                        Math.pow(segment.y - this.deathPortal.y, 2)
+                    );
+
+                    if (distToDeathPortal < 0.5) {
+                        // Instantly teleport segment to spawn portal with no interpolation
+                        segment.x = this.spawnPortal.x;
+                        segment.y = this.spawnPortal.y;
+                        segment.targetX = this.spawnPortal.x;
+                        segment.targetY = this.spawnPortal.y;
+                        segment.lerpX = this.spawnPortal.x;
+                        segment.lerpY = this.spawnPortal.y;
+                        segment.progress = 1;
+                    }
+                }
+
+                // Only update lerp if the segment hasn't hit the portal yet
+                const currentDistToPortal = Math.sqrt(
+                    Math.pow(segment.x - this.deathPortal.x, 2) +
+                    Math.pow(segment.y - this.deathPortal.y, 2)
+                );
+                if (currentDistToPortal >= 0.5) {
+                    segment.updateLerp(deltaTime, this.moveInterval);
+                }
+            });
+
+            if (this.respawnProgress >= totalTime) {
+                this.isRespawning = false;
+                this.respawnProgress = 0;
+            }
             return;
         }
 
@@ -90,8 +163,12 @@ export class Snake implements Updateable, Drawable {
     }
 
     draw(ctx: CanvasRenderingContext2D): void {
-        // Draw the snake using the renderer
-        this.renderer.drawSnake(ctx, this.rects, this.lastFoodType, this.isGhostMode, this.isSlowMotion);
+        if (this.isRespawning) {
+            this.drawRespawnTransition(ctx);
+        } else {
+            // Original draw code
+            this.renderer.drawSnake(ctx, this.rects, this.lastFoodType, this.isGhostMode, this.isSlowMotion);
+        }
 
         // Draw score
         const lastFoodColor = this.lastFoodType ?
@@ -104,6 +181,53 @@ export class Snake implements Updateable, Drawable {
             const progress = 1 - (this.gameOverTime / this.gameOverDuration);
             this.ui.drawGameOver(ctx, this.score, progress);
         }
+    }
+
+    private drawRespawnTransition(ctx: CanvasRenderingContext2D) {
+        // Draw portal background layers first
+        this.deathPortalEffect.drawBackground(ctx, this.deathPortal.x, this.deathPortal.y, '#ff4444');
+        this.spawnPortalEffect.drawBackground(ctx, this.spawnPortal.x, this.spawnPortal.y, '#44ff44');
+
+        // Draw snake segments
+        this.rects.forEach((segment, i) => {
+            if (i > 0) { // Skip head
+                const distToDeathPortal = Math.sqrt(
+                    Math.pow(segment.x - this.deathPortal.x, 2) +
+                    Math.pow(segment.y - this.deathPortal.y, 2)
+                );
+
+                // Only draw if not at portal
+                if (distToDeathPortal >= 0.5) {
+                    this.renderer.drawSnake(ctx, [segment], this.lastFoodType, false, false, true);
+                }
+            }
+        });
+
+        // Draw the head
+        this.renderer.drawSnake(ctx, [this.rects[0]], this.lastFoodType, false, false, false);
+
+        // Draw portal foreground layers on top
+        this.deathPortalEffect.drawForeground(ctx, this.deathPortal.x, this.deathPortal.y, '#ff4444');
+        this.spawnPortalEffect.drawForeground(ctx, this.spawnPortal.x, this.spawnPortal.y, '#44ff44');
+    }
+
+    private finalizeRespawn() {
+        // Set all segments to their new positions
+        this.rects.forEach((segment, i) => {
+            if (i === 0) {
+                segment.setImmediate(this.spawnPortal.x, this.spawnPortal.y);
+            } else {
+                const prevSegment = this.rects[i - 1];
+                segment.setImmediate(prevSegment.targetX, prevSegment.targetY);
+            }
+        });
+
+        // Reset movement state
+        this.moveTimer = this.moveInterval;
+        this.dir = "r";
+
+        // Call the respawn callback if it exists
+        this.onRespawn?.();
     }
 
     move() {
@@ -141,22 +265,31 @@ export class Snake implements Updateable, Drawable {
     private handleCollision() {
         if (this.lives > 1) {
             this.lives--;
-            this.respawnSnake();
+            // Store collision point for death portal
+            const head = this.rects[0];
+            const collisionPoint = this.getNewPosition(head);
+            this.deathPortal = collisionPoint;
+
+            // Choose new spawn location away from death portal
+            do {
+                this.spawnPortal = {
+                    x: randInt(GRID_WIDTH),
+                    y: randInt(GRID_HEIGHT)
+                };
+            } while (
+                Math.abs(this.spawnPortal.x - this.deathPortal.x) < 3 &&
+                Math.abs(this.spawnPortal.y - this.deathPortal.y) < 3
+            );
+
+            // Immediately move head to spawn portal
+            head.setImmediate(this.spawnPortal.x, this.spawnPortal.y);
+
+            this.isRespawning = true;
+            this.respawnProgress = 0;
+            this.respawnDelay = 150; // Slightly slower transition for better effect
         } else {
             this.isGameOver = true;
             this.gameOverTime = this.gameOverDuration;
-        }
-    }
-
-    private respawnSnake() {
-        const oldLength = this.rects.length;
-        this.rects = [
-            new SnakePart(randInt(GRID_WIDTH), randInt(GRID_HEIGHT)),
-            new SnakePart(this.rects[0].targetX + 1, this.rects[0].targetY)
-        ];
-        // Regrow to previous length
-        for (let i = 2; i < oldLength; i++) {
-            this.grow({ x: this.rects[i - 1].targetX, y: this.rects[i - 1].targetY });
         }
     }
 

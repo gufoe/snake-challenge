@@ -1,4 +1,3 @@
-
 export class GameUI {
     drawScore(ctx: CanvasRenderingContext2D, score: number, lastFoodColor: string) {
         const x = 960;
@@ -103,26 +102,22 @@ export class GameUI {
         ctx.fillText(`Score: ${score}`, 0, 0);
         ctx.restore();
 
-        // Draw restart instruction with floating effect
+        // Draw restart instructions with floating effect
         ctx.save();
         ctx.translate(300, 650 + Math.sin(Date.now() / 400) * 5);
         const pulseScale = 1 + Math.sin(Date.now() / 500) * 0.1;
         ctx.scale(pulseScale, pulseScale);
 
-        // Draw key hint with proper centering
+        // Draw desktop instruction
         ctx.fillStyle = `rgba(255, 255, 255, ${0.8 * progress})`;
         ctx.font = '20px Arial';
-        ctx.textAlign = 'right';
-        ctx.fillText('Press', -40, 0);
+        ctx.textAlign = 'center';
+        ctx.fillText('Press SPACE or', 0, -20);
 
-        // Draw SPACE key centered
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 * progress})`;
-        ctx.lineWidth = 2;
-        this.drawKey(ctx, 0, 0, 70, 25, 'SPACE');
+        // Draw mobile instruction
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.8 * progress})`;
+        ctx.fillText('Tap anywhere', 0, 20);
 
-        // Draw "to restart" text
-        ctx.textAlign = 'left';
-        ctx.fillText('to restart', 40, 0);
         ctx.restore();
 
         // Reset shadow

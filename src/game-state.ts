@@ -5,6 +5,7 @@ import { PopupText, POPUP_MESSAGES } from './popup';
 import { randInt } from './utils';
 import { Updateable, Drawable } from './types';
 import { PowerUp, powerUpTypes, ExtraLifePowerUp, TimeSlowPowerUp, GhostPowerUp } from './powerup';
+import { ScreenShake } from './screen-shake';
 
 export class GameState implements Updateable, Drawable {
     snake: Snake;
@@ -17,6 +18,7 @@ export class GameState implements Updateable, Drawable {
     keys: { [key: string]: boolean } = {};
     currentFoodIndex: number = 0;
     nextFoodType: Food | null = null;
+    private screenShake: ScreenShake = new ScreenShake();
 
     constructor() {
         this.snake = new Snake(6, 10);
@@ -26,9 +28,21 @@ export class GameState implements Updateable, Drawable {
             this.snake.lastFoodType = this.currentFood;
             this.snake.transitionTime = 0;
         }
+
+        // Listen for snake respawn events
+        this.snake.onRespawn = () => {
+            this.resetScreenShake();
+        };
+    }
+
+    private resetScreenShake(): void {
+        this.screenShake = new ScreenShake();
     }
 
     update(deltaTime: number): void {
+        // Update screen shake
+        this.screenShake.update();
+
         // Update snake
         this.snake.update(deltaTime);
 
@@ -79,6 +93,9 @@ export class GameState implements Updateable, Drawable {
             const message = POPUP_MESSAGES[Math.floor(Math.random() * POPUP_MESSAGES.length)];
             this.popupTexts.push(new PopupText(message, foodX, foodY));
 
+            // Add screen shake effect
+            this.screenShake.start(30, 40); // Much stronger intensity and longer duration
+
             // Reset transition effect
             this.snake.transitionTime = 0;
 
@@ -119,6 +136,10 @@ export class GameState implements Updateable, Drawable {
     }
 
     draw(ctx: CanvasRenderingContext2D): void {
+        // Apply screen shake
+        ctx.save();
+        ctx.translate(this.screenShake.offsetX, this.screenShake.offsetY);
+
         // Draw food
         if (this.currentFood) {
             this.currentFood.draw(ctx);
@@ -137,6 +158,9 @@ export class GameState implements Updateable, Drawable {
 
         // Draw popup texts
         this.popupTexts.forEach(p => p.draw(ctx));
+
+        // Reset transform after screen shake
+        ctx.restore();
     }
 
     spawnNewFood(): void {

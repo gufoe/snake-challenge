@@ -23,6 +23,16 @@ export class SnakePart implements Position {
         this.progress = 0;
     }
 
+    setImmediate(x: number, y: number) {
+        this.x = x;
+        this.y = y;
+        this.targetX = x;
+        this.targetY = y;
+        this.lerpX = x;
+        this.lerpY = y;
+        this.progress = 1;
+    }
+
     updateLerp(deltaTime: number, moveInterval: number) {
         // Use the current move interval for animation timing
         const speed = deltaTime / moveInterval;
